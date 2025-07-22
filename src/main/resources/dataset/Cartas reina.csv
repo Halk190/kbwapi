@@ -1,0 +1,9 @@
+amount,ID,DESCRIPCION,ATK,LVL,REINO,NOMBRE,
+1,2MBNT2025_23,"Reina Venevolente defensora de la vida y la prosperidad. Su deber es expandir la vida.
+<i><b>Habilidad Esp:</b> </i>  Puedes llamar un Token del Bosque hasta LVL. IV a la Arena y tú eliges la posición de Combate, o,  restar el ATK de esta carta a la Bestia que elijas según su posición de Combate en la Arena del adversario. No aplica para Reinas.",ATK=500,LVL. III,Natura,Reina Ulises,
+1,2MBN2025_23,"Reina no conflictiva, pero, siempre busca territorios desolados que ocupar.
+<i><b>Habilidad Esp:</b> </i>  Selecciona Bestias Nicrom de hasta LVL IV en el Cementerio max. dos. Equipa la selección a esta carta y súmale ese ATK. Si ya tienes dos Bestias equipadas, en el siguiente Turno puedes intercambiar una de ellas por una Bestia del Cementerio nueva. La carta antigua vuelve al Cementerio.",ATK=0,LVL. I,Nicrom,Reina Komori,
+1,2MBA2025_23,"Reina guerrera, en busca de expandir el mar a nuevos territorios.
+<i><b>Habilidad Esp:</b> </i>  Puedes invocar a una Bestia hasta LVL IV desde tu Mazo. Si al finalizar el Turno no la tributaste para traer una Bestia de mayor LVL, envíala a la Mano. Si en este Turno la carta tuvo un Combate y fue al Cementerio, esta no vuelve a la Mano.",ATK=1900,LVL. V,Aqua,Reina Orcinus,
+1,2MBP2025_23,"Conquistadora de territorios, una Reina que no quisieras tener de enemiga.
+<i><b>Habilidad Esp:</b> </i> Activa una de estas habilidades: Puedes llamar a la Arena una Bestia desde el Mazo máx LVL IV , o, selecciona una carta al azar de la Mano del oponente y devuélvela al Mazo.",ATK=1400,LVL. III,Pyro,Reina Naja,

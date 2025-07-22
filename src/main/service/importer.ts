@@ -25,7 +25,10 @@ export async function importarCartas(env: { DB: D1Database }) {
         const tipoCarta = detectarTipoPorNombreArchivo(fileName);
 
         const content = readFileSync(path, 'utf-8');
-        const rows = parse(content, { columns: true, skip_empty_lines: true });
+        const rows = parse(content, {
+          columns: true,
+          skip_empty_lines: true,
+        }) as Record<string, string>[];
 
         let nuevas = 0;
 

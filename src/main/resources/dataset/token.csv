@@ -1,0 +1,5 @@
+amount,ID,DESCRIPCION,ATK,DEF,LVL,REINO,NOMBRE,
+1,2SSC2025_38,Bestia estándar creada a partir del poder de una reina,ATK=500,DEF=1200,LVL. I,Natura,Token del Bosque 1,
+1,2SSC2025_39,Bestia estándar creada a partir del poder de una reina,ATK=500,DEF=1500,LVL. II,Natura,Token del Bosque 2,
+1,2MBNT2025_24,Bestia estándar creada a partir del poder de una Reina Natura.,ATK=500,DEF=1800,LVL. III,Natura,Token del Bosque 3,
+1,2MBNT2025_25,Bestia estándar creada a partir del poder de una Reina Natura.,ATK=500,DEF=2500,LVL. IV,Natura,Token del Bosque 4,

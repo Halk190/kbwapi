@@ -1,0 +1,18 @@
+amount,ID,DESCRIPCION,TIPO,NOMBRE,
+1,2MBNT2025_17,"Una vez por Turno, puedes seleccionar una Bestia en tu Cementerio y equiparla a una Bestia y/o Reina en tu Arena. La carta en la Arena solo puede tener un equipo. Mientras esté equipada, su ATK o DEF aumenta en 500 puntos, según su posición en la Arena. Si la Bestia equipada es destruida, ambas cartas son enviadas al Cementerio.",Conjuro Campo,Florecer de Nuevo,
+1,2MBN2025_17,"Puedes usar uno de los siguientes efectos una vez cada dos Turnos tuyos:
+-Enviar una Bestia de LVL IV o menor al Cementerio desde el Mazo.
+-Enviar una carta de mi Mano al Cementerio, luego robar una carta del Mazo.",Conjuro Campo,Sacrificio Ritual,
+1,2MBA2025_17,"Puedes regresar del Cementerio a tu Mano o a la Arena, una Bestia LVL IV o menor cada dos Turnos (No cuentan los Turnos del oponente).",Conjuro Campo,Llamado de los Ancestros,
+1,2MBP2025_17,"Selecciona un Conjuro o Recurso en tu Arena (puedes incluir este), devuélvelo a tu Mazo, luego roba una carta.",Conjuro Campo,Trueque de pólvora,
+1,2SSC2025_24,"Selecciona una Bestia en tu Cementerio, conviértela en ""Equipo Maldito"" y asígnala a una Bestia enemiga. Mientras esté equipada, reduce su ATK o DEF en 500 puntos dependiendo de su posición. Puedes activar este efecto una vez por Turno y no lo puedes aplicar a una Bestia ya equipada. Si la Bestia equipada es enviada al Cementerio, la carta equipada regresa a su Cementerio.",Conjuro Campo,Lamento de los Caidos,
+1,2SSC2025_25,Pon un contador a esta carta cada que tu adversario traiga una Bestia a su Arena. Cuando esta carta tenga cuatro contadores puedes hacer que tu adversario no entre en la Fase de Combate por dos de sus Turnos.,Conjuro Campo,Interrupción Estratégica,
+1,2SSC2025_26,Por cada dos cartas en tu Cementerio puedes intercambiar la posción de ataque o defensa de una Bestia en tu Arena o la de tu adversario.,Conjuro Campo,Forzar Posición,
+1,2SSC2025_27,"Coloca un contador sobre esta carta cada vez que tu oponente robe o invoque una carta del Mazo debido a un Conjuro, Recurso, Habilidad Esp o la Habilidad Esp de su Reina. Cuando esta carta tenga tres contadores, puedes devolver dos cartas de tu Cementerio al Mazo.",Conjuro Campo,Renovación Cíclica,
+1,2SSC2025_28,"Si tu oponente tiene dos o más Bestias en la Arena y una de ellas es menor o igual a LVL V, puedes escoger una de ellas para Tributar junto a una Bestia en tu Arena.",Conjuro Campo,Saqueo de Almas,
+1,2SSC2025_29,Cada dos Turnos puedes seleccionar una Bestia en la Arena de tu adversario y devolverla a su Mano (No cuentan los Turnos del oponente).,Conjuro Campo,Contra Voluntad,
+1,2MRSP2025_08,"Puedes activar uno de los siguientes efectos:
+-Envia desde tu Mazo una Bestia LVL IV o menor al Cementerio, luego activa la Habilidad Esp de tu Reina Nicrom.
+-Trae deste tu Mazo o Cementerio una Bestia 'Spinae' no mayor a LVL IV a la Arena. Tú eliges la posición de combate.
+Debes esperar dos de tus turnos para poder volver a activar este conjuro.",Conjuro Campo,Territorio Spinae,
+1,2SESP2025_08,"Una vez por Turno, puedes seleccionar una Bestia Normal en tu Arena, luego equiparle una Bestia de Habilidad Esp de cualquier Cementerio. La Bestia equipada adquiere la Habilidad Esp de la Bestia equipo. Si la Bestia es vencida cada carta va a su respectivo Cementerio.",Conjuro Campo,Reflejo de Poder,

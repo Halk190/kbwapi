@@ -1,0 +1,45 @@
+amount,ID,DESCRIPCION,ATK,DEF,LVL,REINO,NOMBRE,
+1,2MBNT2025_01,"Una hechicera que busca siempre presas de otros reinos para incrementar su poder. 
+Habilidad Esp: Cuando esta carta es atacada y está en posición de ataque, puedes igualar sus puntos a los de la Bestia atacante.",ATK=500,DEF=300,LVL. II,Natura,Hechicera del Pantano,
+1,2MBNT2025_02,"Caballero valiente hijo del sol.
+Habilidad Esp:  Cuando cualquier jugador entra a Fase de Combate esta carta:  -Si está en posición de ataque,  gana 300 puntos de ATK. -Si está en posición de defensa, gana 100 puntos de DEF. Al finalizar fase de combate de cualquier jugador, los puntos de esta carta vuelven a sus valores originales.",ATK=1600, DEF=1800,LVL. IV,Natura,Caballero Pyro,
+1,2MBNT2025_03,"Grácil espíritu del bosque. Genera paz con sus bailes armónicos.
+Habilidad Esp: Si estás en Fase de Seteo, tienes Bestias del bosque en el Cementerio y esta es tu única Bestia en la Arena, puedes llamar una Bestia del bosque hasta LVL IV desde el Cementerio. ",ATK=2200, DEF=1500,LVL. V,Natura,Danzadora del Pantano,
+1,2MBNT2025_04,"Poderosa guerrera, defiende los ambientes más altos de las cordilleras. 
+Habilidad Esp: Si logras derrotar a una Bestia y hay otra con el mismo LVL en la Arena, envía ambas al Cementerio.",ATK=2500, DEF=2650,LVL. VI,Natura,Guerrera Montés,
+1,2MBN2025_01,"Demonio acorazado que custodia el castillo de la Reina. 
+Habilidad Esp: Si el oponente ataca esta carta y está en posición defensiva, iguala la DEF al ATK de la bestia enemiga. Ninguna Bestia muere ni pierde puntos. Solo puedes utilizar esta habilidad una vez por Fase de Combate.",ATK=0, DEF=0,LVL. II,Nicrom,Tenebrae Spinae,
+1,2MBN2025_02,"Sombras tenebrosas que se alimentan de pequeñas criaturas. 
+Habilidad Esp: Si esta carta combate en tu Turno contra una Bestia en posición defensiva, invierte los puntos ATK y DEF de esta carta.",ATK=500, DEF=2300,LVL. II,Nicrom,Infernum Cimex,
+1,2MBN2025_03,"Un demonio que busca siempre presas para incrementar su poder. 
+Habilidad Esp: Puedes seleccionar una de las Bestias de tuoponente durante tu Fase de Combate. Iguala el ATK de esta carta al de la Bestia elegida.",ATK=500,DEF=300,LVL. III,Nicrom,Anima Consumer,
+1,2MBN2025_04,"Fiel guardaespaldas de la Reina, se fortalece con la oscuridad. 
+Habilidad Esp: Si esta carta va al Cementerio después de combatir durante tu Turno, puedes seleccionar una de tus Bestias en la Arena y en el Turno del oponente los puntos de esa Bestia no se verán afectados por los ataques.",ATK=900, DEF=1000,LVL. IV,Nicrom,Pulvis Komori,
+1,2MBA2025_01,"Bestia etérea que brilla con un resplandor azulado, rodeada de esferas de energía flotante.
+Habilidad Esp: Al ser invocada, puedes traer una Bestia a la Arena LVL III o menor de tu Cementerio o Mazo; invócala en Posición de Defensa. Este efecto solo puede activarse en tu Turno y cuando no esté en Fase de Combate.",ATK=300, DEF=800,LVL. III,Aqua,Nebula Marina,
+1,2MBA2025_02,"Esta tierna y adorable Bestia usa su energía marina para proteger a sus aliados. Aunque no es fuerte en Combate, su ayuda es invaluable. 
+Habilidad Esp: Selecciona una Bestia en tu Arena (incluso esta). Si la Bestia seleccionada es atacada, reduce el ATK de la Bestia atacante en 800 puntos. Si esta carta sobrevive, el valor de puntos original se restaura al final de la Fase de Combate.",ATK=1300, DEF=2100,LVL. IV,Aqua,Guardián del Mar,
+1,2MBA2025_03,"Bestia gigante con protuberancias brillantes en forma de corona. Puede llamar a un cardumen de criaturas para asistirla. 
+Habilidad Esp: Cuando esta carta es invocada a la Arena, puedes añadir una Bestia 'Cardumen Carmesí' desde tu Mazo a tu Mano.",ATK=1800, DEF=1000,LVL. V,Aqua,Sombra Radiante,
+1,2MBA2025_04,"La etapa adulta de 'Nebula Marina', un dragón serpenteante de energía marina con un resplandor etéreo y majestuoso. 
+Habilidad Esp: Si esta carta es enviada al Cementerio durante la Fase de Combate, puedes añadir 'Nebula Marina' desde el Cementerio o el Mazo a tu Mano.",ATK=2000, DEF=2700,LVL. VI,Aqua,Dragón de Mareas Etéreas,
+1,2MBP2025_01,"Ser de luz apacible y venerado por su capacidad de traer la paz.
+Habilidad Esp: Cuando esta Bestia es invocada puedes selecccionar una Bestia enemiga, dicha carta no podrá combatir hasta que esta carta vaya al Cementerio",ATK=700,DEF=300,LVL. II,Pyro,Calma de Luz,
+1,2MBP2025_02,"Guardian letal de las puertas del castillo Real. Traerá la guerra a los insensatos que osen intentar entrar al castillo.
+Habilidad Esp: Si esta carta logra vencer a otra en Combate, réstale 200 puntos a otra Bestia en la Arena enemiga dependiendo de su posición. Si tu oponente no tiene más Bestias en la Arena, súmale 200 puntos de ATK a esta carta.",ATK=2000, DEF=800,LVL. V,Pyro,Guardián de las Puertas,
+1,2MBP2025_03,"Guerrero especializado en desestabilizar las fuerzas enemigas.
+Habilidad Esp:  Si atacas a una Bestia, puedes cambiar su posición de Combate previo al cálculo de daño. Si la Bestia seleccionada no va al Cementerio, retoma su posición original.",ATK=1600, DEF=2000,LVL. IV,Pyro,Infernus Inversor,
+1,2MBP2025_04,"Criatura magica de fuego existente en múltiples planos. Utiliza sus habilidades para darle soporte a las fuerzas aliadas.
+Habilidad Esp: Si durante la Fase de Combate esta carta envía al Cementerio a una Bestia enemiga, puedes seleccionar una de tus Bestias en el Cementerio hasta LVL V y traerla a la Arena. Tú eliges la posición. Si la Bestia tiene Habilidad Esp. no puede utilizarla hasta el siguiente Turno.",ATK=1400, DEF=500,LVL. III,Pyro,Abrasador Cambiaplano,
+1,2MRSP2025_01,"Destinado a ser el alimento de la realeza del Reino Nicrom. 
+Habilidad Esp: Si esta Bestia va al Cementerio, puedes usar la Habilidad Esp de tu Reina Komori.",ATK=1500, DEF=1600,LVL. IV,Nicrom,Sacrificium Spinae,
+1,2MRSP2025_02,"Hechicero por excelencia de la familia 'Spinae' del reino Nicrom. 
+Habilidad Esp: Si esta Bestia está en posición de ATK en tu Arena y tu oponente activa un Recurso, niega su activación enviando dicho Recurso al Cementerio y cambia esta carta a posición de DEF.",ATK=1800, DEF=1000,LVL. IV,Nicrom,Negador Spinae,
+1,2MRSP2025_03,"Protector especializado de la familia 'Spinae'. 
+Habilidad Esp: Si aún no has invocado Bestias puedes invocar esta carta sin necesidad de Tributar, pero no puedes invocar mas Bestias en este Turno.",ATK=500, DEF=2500,LVL. V,Nicrom,Acorazado Spinae,
+1,2SESP2025_01,"Tiernas criaturas que abundan en las plantas del bosque y atraen a Bestias con su agradable olor. 
+Habilidad Esp: Al ser invocado,llama desde tu Mazo una Bestia normal de hasta LVL IV a la Arena tú eliges la posicion de combate.",ATK=600, DEF=1100,LVL. II,Natura,Polvillo del Bosque,
+1,2SESP2025_02,"Bestia capaz de sanar sus heridas y las de otros usando la energía marina. 
+Habilidad Esp: Al ser invocada, puedes traer desde tu Cementerio o Mazo un Conjuro 'Lluvia Curativa' a tu Mano.",ATK=2100, DEF=2000,LVL. V,Aqua,Curamandra ,
+1,2SESP2025_03,"Insertar descripción. 
+Habilidad Esp: Mientras esta Bestia este en la Arena, puedes selecccionar una Bestia enemiga, esa carta no podrá combatir hasta que esta carta deje la Arena.",ATK=1200, DEF=2200,LVL. V,Pyro,Calma en Llamas,
