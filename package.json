@@ -9,14 +9,17 @@
 		"cf-typegen": "wrangler types"
 	},
 	"devDependencies": {
-		"@types/node": "^24.1.0",
+		"@cloudflare/workers-types": "^4.20250807.0",
+		"@types/node": "^24.2.0",
 		"ts-node": "^10.9.2",
-		"typescript": "^5.8.3",
+		"typescript": "^5.9.2",
 		"wrangler": "^4.27.0"
 	},
 	"dependencies": {
+		"better-sqlite3": "^12.2.0",
 		"csv-parse": "^6.1.0",
-		"dotenv": "^17.2.0",
+		"dotenv": "^17.2.1",
+		"drizzle-orm": "^0.44.4",
 		"hono": "^4.7.5",
 		"node-fetch": "^3.3.2"
 	}
