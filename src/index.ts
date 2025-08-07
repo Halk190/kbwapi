@@ -95,10 +95,6 @@ export default {
         }
 });
 
-        // Ejecutar la importación de cartas solo cuando se desee
-        // 🔥 DESCOMENTA esta línea cuando necesites importar cartas
-        // await importarCartas(env);
-
         return app.fetch(request, env, ctx);
     }
 } satisfies ExportedHandler<Env>;
