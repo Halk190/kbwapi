@@ -1,11 +1,13 @@
 import { Hono, Context, Next } from "hono";
 import { cors } from "hono/cors";
 import { handleRest } from './rest';
+import { importarCartas } from "./main/service/importer";
 
 export interface Env {
     DB: D1Database;
     SECRET: SecretsStoreSecret;
 }
+
 
 // # List all users
 // GET /rest/users
@@ -26,6 +28,7 @@ export interface Env {
 
 // # Delete a user
 // DELETE /rest/users/123
+
 
 export default {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -82,6 +85,19 @@ export default {
                 return c.json({ error: error.message }, 500);
             }
         });
+
+        app.post('/admin/importar', authMiddleware, async (c) => {
+            try {
+                await importarCartas(c.env); // c.env ya tiene { DB, SECRET }
+                return c.json({ message: 'Cartas importadas correctamente' });
+            } catch (err: any) {
+            return c.json({ error: err.message }, 500);
+        }
+});
+
+        // Ejecutar la importación de cartas solo cuando se desee
+        // 🔥 DESCOMENTA esta línea cuando necesites importar cartas
+        // await importarCartas(env);
 
         return app.fetch(request, env, ctx);
     }
