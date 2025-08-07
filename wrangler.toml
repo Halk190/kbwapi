@@ -7,13 +7,13 @@ compatibility_date = "2025-03-03"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "Kingdom-Beast-World"
+database_name = "<Kingdom-Beast-World>"
 database_id = "cd100dce-750c-4f74-ad64-17cfb7c5d0d6"  #  reemplaza con tu ID real
 
 [[secrets_store_secrets]]
 binding = "SECRET"
-secret_name = "secret_name"  #  este es el nombre que usarás en `wrangler secret put secret_name`
-store_id = "store_id"      #  opcional, puedes dejarlo fuera si usas el comando manualmente
+secret_name = "admin_token"  #  este es el nombre que usarás en `wrangler secret put secret_name`
+store_id = "bbfe8b921ab8493e989006835362bf8e"      #  opcional, puedes dejarlo fuera si usas el comando manualmente
 
 [observability]
 enabled = true
