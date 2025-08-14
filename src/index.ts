@@ -58,10 +58,10 @@ export default {
         app.post('/admin/importar-json', authMiddleware, async (c) => {
             try {
                 // Extraer los arrays desde el JSON importado
-                const { carta = [], bestia = [], reina = [], token = [], conjuro = [], recurso = [] } = cartasData as any;
+                const { cartas = [], bestias = [], reinas = [], tokens = [], conjuros = [], recursos = [] } = cartasData as any;
 
                 // Insertar cartas (padres)
-                for (const p of carta) {
+                for (const p of cartas) {
                     const exists = await env.DB.prepare(`SELECT id FROM cartas WHERE id_fisico = ? LIMIT 1`).bind(p.id_fisico).first();
                     if (exists) continue;
 
@@ -77,7 +77,7 @@ export default {
                 };
 
                 // Insertar bestias
-                for (const b of bestia) {
+                for (const b of bestias) {
                     const parentId = await getParentId(b.id_fisico);
                     if (!parentId) continue;
                     const exists = await env.DB.prepare(`SELECT id FROM bestia WHERE id = ? LIMIT 1`).bind(parentId).first();
@@ -88,7 +88,7 @@ export default {
                 }
 
                 // Insertar reinas
-                for (const r of reina) {
+                for (const r of reinas) {
                     const parentId = await getParentId(r.id_fisico);
                     if (!parentId) continue;
                     const exists = await env.DB.prepare(`SELECT id FROM reina WHERE id = ? LIMIT 1`).bind(parentId).first();
@@ -98,7 +98,7 @@ export default {
                 }
 
                 // Insertar tokens
-                for (const t of token) {
+                for (const t of tokens) {
                     const parentId = await getParentId(t.id_fisico);
                     if (!parentId) continue;
                     const exists = await env.DB.prepare(`SELECT id FROM token WHERE id = ? LIMIT 1`).bind(parentId).first();
@@ -108,7 +108,7 @@ export default {
                 }
 
                 // Insertar conjuros
-                for (const cj of conjuro) {
+                for (const cj of conjuros) {
                     const parentId = await getParentId(cj.id_fisico);
                     if (!parentId) continue;
                     const exists = await env.DB.prepare(`SELECT id FROM conjuro WHERE id = ? LIMIT 1`).bind(parentId).first();
@@ -117,7 +117,7 @@ export default {
                 }
 
                 // Insertar recursos
-                for (const rc of recurso) {
+                for (const rc of recursos) {
                     const parentId = await getParentId(rc.id_fisico);
                     if (!parentId) continue;
                     const exists = await env.DB.prepare(`SELECT id FROM recurso WHERE id = ? LIMIT 1`).bind(parentId).first();
