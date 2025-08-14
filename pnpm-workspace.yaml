@@ -1,0 +1,7 @@
+ignoredBuiltDependencies:
+  - better-sqlite3
+  - esbuild
+  - sharp
+
+onlyBuiltDependencies:
+  - workerd
