@@ -1,7 +1,8 @@
 import { Hono, Context, Next } from "hono";
 import { cors } from "hono/cors";
 import { handleRest } from './rest';
-import { importarCartas } from "./main/service/importer";
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 export interface Env {
     DB: D1Database;
@@ -32,68 +33,140 @@ export interface Env {
 
 export default {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-        const app = new Hono<{ Bindings: Env }>();
+    const app = new Hono<{ Bindings: Env }>();
 
-        // Apply CORS to all routes
-        app.use('*', async (c, next) => {
-            return cors()(c, next);
-        })
+    // CORS para todas las rutas
+    app.use('*', async (c, next) => cors()(c, next));
 
-        // Secret Store key value that we have set
-        const secret = await env.SECRET.get();
+    // Obtener secreto para auth
+    const secret = await env.SECRET.get();
 
-        // Authentication middleware that verifies the Authorization header
-        // is sent in on each request and matches the value of our Secret key.
-        // If a match is not found we return a 401 and prevent further access.
-        const authMiddleware = async (c: Context, next: Next) => {
-            const authHeader = c.req.header('Authorization');
-            if (!authHeader) {
-                return c.json({ error: 'Unauthorized' }, 401);
-            }
+    // Middleware para autenticar vía Bearer token
+    const authMiddleware = async (c: Context, next: Next) => {
+      const authHeader = c.req.header('Authorization');
+      if (!authHeader) return c.json({ error: 'Unauthorized' }, 401);
 
-            const token = authHeader.startsWith('Bearer ')
-                ? authHeader.substring(7)
-                : authHeader;
+      const token = authHeader.startsWith('Bearer ')
+        ? authHeader.substring(7)
+        : authHeader;
 
-            if (token !== secret) {
-                return c.json({ error: 'Unauthorized' }, 401);
-            }
+      if (token !== secret) return c.json({ error: 'Unauthorized' }, 401);
 
-            return next();
+      return next();
+    };
+
+    // Endpoints REST CRUD
+    app.all('/rest/*', authMiddleware, handleRest);
+
+    // Endpoint para ejecutar consultas SQL arbitrarias
+    app.post('/query', authMiddleware, async (c) => {
+      try {
+        const { query, params } = await c.req.json();
+        if (!query) return c.json({ error: 'Query is required' }, 400);
+
+        const results = await env.DB.prepare(query).bind(...(params || [])).all();
+        return c.json(results);
+      } catch (error: any) {
+        return c.json({ error: error.message }, 500);
+      }
+    });
+
+        // Endpoint que importa JSON desde archivo para insertar en DB
+        app.post('/admin/importar-json', authMiddleware, async (c) => {
+      try {
+        // Ruta absoluta del archivo JSON con las cartas
+        const filePath = join('src', 'resources', 'dataset', 'cartas.json');
+        const jsonData = JSON.parse(readFileSync(filePath, 'utf-8'));
+
+        // Se espera jsonData con keys: carta[], bestia[], reina[], token[], conjuro[], recurso[]
+        const { carta = [], bestia = [], reina = [], token = [], conjuro = [], recurso = [] } = jsonData;
+
+        // Inserta en tabla cartas (padres)
+        for (const p of carta) {
+          const exists = await env.DB.prepare(`SELECT id FROM cartas WHERE id_fisico = ? LIMIT 1`).bind(p.id_fisico).first();
+          if (exists) continue;
+
+          const cols = ['id_global', 'id_fisico', 'nombre', 'descripcion', 'tipo_carta'];
+          const q = `INSERT INTO cartas (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`;
+          await env.DB.prepare(q).bind(p.id_global, p.id_fisico, p.nombre, p.descripcion, p.tipo_carta).run();
+        }
+
+        // Función para obtener el id autoincremental generado de carta
+        const getParentId = async (id_fisico: string) => {
+          const row = await env.DB.prepare(`SELECT id FROM cartas WHERE id_fisico = ? LIMIT 1`).bind(id_fisico).first();
+          return row?.id ?? null;
         };
 
-        // CRUD REST endpoints made available to all of our tables
-        app.all('/rest/*', authMiddleware, handleRest);
+        // Insertar bestias
+        for (const b of bestia) {
+          const parentId = await getParentId(b.id_fisico);
+          if (!parentId) continue;
 
-        // Execute a raw SQL statement with parameters with this route
-        app.post('/query', authMiddleware, async (c) => {
-            try {
-                const body = await c.req.json();
-                const { query, params } = body;
+          const exists = await env.DB.prepare(`SELECT id FROM bestia WHERE id = ? LIMIT 1`).bind(parentId).first();
+          if (exists) continue;
 
-                if (!query) {
-                    return c.json({ error: 'Query is required' }, 400);
-                }
-
-                // Execute the query against D1 database
-                const results = await env.DB.prepare(query)
-                    .bind(...(params || []))
-                    .all();
-
-                return c.json(results);
-            } catch (error: any) {
-                return c.json({ error: error.message }, 500);
-            }
-        });
-
-        app.post('/admin/importar', authMiddleware, async (c) => {
-            try {
-                await importarCartas(c.env); // c.env ya tiene { DB, SECRET }
-                return c.json({ message: 'Cartas importadas correctamente' });
-            } catch (err: any) {
-            return c.json({ error: err.message }, 500);
+          await env.DB.prepare(
+            `INSERT INTO bestia (id, atk, def, lvl, reino, tiene_habilidad_esp) VALUES (?, ?, ?, ?, ?, ?)`
+          ).bind(parentId, b.atk, b.def, b.lvl, b.reino, b.tiene_habilidad_esp ? 1 : 0).run();
         }
-});
+
+        // Insertar reinas
+        for (const r of reina) {
+          const parentId = await getParentId(r.id_fisico);
+          if (!parentId) continue;
+
+          const exists = await env.DB.prepare(`SELECT id FROM reina WHERE id = ? LIMIT 1`).bind(parentId).first();
+          if (exists) continue;
+
+          await env.DB.prepare(
+            `INSERT INTO reina (id, atk, lvl, reino) VALUES (?, ?, ?, ?)`
+          ).bind(parentId, r.atk, r.lvl, r.reino).run();
+        }
+
+        // Insertar tokens
+        for (const t of token) {
+          const parentId = await getParentId(t.id_fisico);
+          if (!parentId) continue;
+
+          const exists = await env.DB.prepare(`SELECT id FROM token WHERE id = ? LIMIT 1`).bind(parentId).first();
+          if (exists) continue;
+
+          await env.DB.prepare(
+            `INSERT INTO token (id, atk, def, lvl, reino) VALUES (?, ?, ?, ?, ?)`
+          ).bind(parentId, t.atk, t.def, t.lvl, t.reino).run();
+        }
+
+        // Insertar conjuros
+        for (const cj of conjuro) {
+          const parentId = await getParentId(cj.id_fisico);
+          if (!parentId) continue;
+
+          const exists = await env.DB.prepare(`SELECT id FROM conjuro WHERE id = ? LIMIT 1`).bind(parentId).first();
+          if (exists) continue;
+
+          await env.DB.prepare(
+            `INSERT INTO conjuro (id, tipo) VALUES (?, ?)`
+          ).bind(parentId, cj.tipo).run();
+        }
+
+        // Insertar recursos
+        for (const rc of recurso) {
+          const parentId = await getParentId(rc.id_fisico);
+          if (!parentId) continue;
+
+          const exists = await env.DB.prepare(`SELECT id FROM recurso WHERE id = ? LIMIT 1`).bind(parentId).first();
+          if (exists) continue;
+
+          await env.DB.prepare(
+            `INSERT INTO recurso (id) VALUES (?)`
+          ).bind(parentId).run();
+        }
+
+        return c.json({ message: 'Importación finalizada' });
+      } catch (err: any) {
+        return c.json({ error: err.message }, 500);
+      }
+    });
 
         return app.fetch(request, env, ctx);
     }
