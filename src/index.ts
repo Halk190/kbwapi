@@ -120,7 +120,7 @@ export default {
                   reino: b.reino,
                   tiene_habilidad_esp: b.tieneHabilidadEsp ? 1 : 0
               };
-              checkUndefined(bestiaDb, 'bestia');
+              checkUndefined(bestiaDb, 'bestias');
 
               await env.DB.prepare(
                   `INSERT INTO bestia (id, atk, def, lvl, reino, tiene_habilidad_esp) VALUES (?, ?, ?, ?, ?, ?)`
@@ -141,7 +141,7 @@ export default {
                   lvl: r.lvl,
                   reino: r.reino
               };
-              checkUndefined(reinaDb, 'reina');
+              checkUndefined(reinaDb, 'reinas');
 
               await env.DB.prepare(
                   `INSERT INTO reina (id, atk, lvl, reino) VALUES (?, ?, ?, ?)`
@@ -163,7 +163,7 @@ export default {
                   lvl: t.lvl,
                   reino: t.reino
               };
-              checkUndefined(tokenDb, 'token');
+              checkUndefined(tokenDb, 'tokens');
 
               await env.DB.prepare(
                   `INSERT INTO token (id, atk, def, lvl, reino) VALUES (?, ?, ?, ?, ?)`
@@ -182,7 +182,7 @@ export default {
                   id: parentId,
                   tipo: cj.tipo
               };
-              checkUndefined(conjuroDb, 'conjuro');
+              checkUndefined(conjuroDb, 'conjuros');
 
               await env.DB.prepare(
                   `INSERT INTO conjuro (id, tipo) VALUES (?, ?)`
@@ -198,7 +198,7 @@ export default {
               if (exists) continue;
 
               const recursoDb = { id: parentId };
-              checkUndefined(recursoDb, 'recurso');
+              checkUndefined(recursoDb, 'recursos');
 
               await env.DB.prepare(
                   `INSERT INTO recurso (id) VALUES (?)`
