@@ -229,12 +229,19 @@ export default {
       }
     });
 
-    app.get('/allcards', userMiddleware ,async (c: any) => {
+    // Endpoint para obtener todas las cartas
+    app.get('/allcards', userMiddleware, async (c: any) => {
       try {
         const limit = parseInt(c.req.query.limit as string) || 50;
         const offset = parseInt(c.req.query.offset as string) || 0;
       
         const query = `
+          WITH paged AS (
+            SELECT id
+            FROM cartas
+            ORDER BY id ASC
+            LIMIT ? OFFSET ?
+          )
           SELECT 
             ca.id_fisico, ca.nombre, ca.descripcion, ca.tipo_carta,
             b.atk AS b_atk, b.def AS b_def, b.lvl AS b_lvl, b.reino AS b_reino, b.tiene_habilidad_esp,
@@ -242,12 +249,12 @@ export default {
             t.atk AS t_atk, t.def AS t_def, t.lvl AS t_lvl, t.reino AS t_reino,
             cj.tipo AS cj_tipo
           FROM cartas ca
+          JOIN paged p ON ca.id = p.id
           LEFT JOIN bestias b ON ca.id = b.id
           LEFT JOIN reinas r ON ca.id = r.id
           LEFT JOIN tokens t ON ca.id = t.id
           LEFT JOIN conjuros cj ON ca.id = cj.id
           ORDER BY ca.id ASC
-          LIMIT ? OFFSET ?
         `;
       
         const rows = await env.DB.prepare(query).bind(limit, offset).all();
@@ -259,15 +266,27 @@ export default {
             descripcion: row.descripcion,
             tipoCarta: row.tipo_carta
           };
+        
+          // Agregar subtablas según existan
           if (row.b_atk != null) {
-            obj.atk = row.b_atk; obj.def = row.b_def; obj.lvl = row.b_lvl; obj.reino = row.b_reino; obj.tieneHabilidadEsp = row.tiene_habilidad_esp;
+            obj.atk = row.b_atk;
+            obj.def = row.b_def;
+            obj.lvl = row.b_lvl;
+            obj.reino = row.b_reino;
+            obj.tieneHabilidadEsp = row.tiene_habilidad_esp;
           } else if (row.r_atk != null) {
-            obj.atk = row.r_atk; obj.lvl = row.r_lvl; obj.reino = row.r_reino;
+            obj.atk = row.r_atk;
+            obj.lvl = row.r_lvl;
+            obj.reino = row.r_reino;
           } else if (row.t_atk != null) {
-            obj.atk = row.t_atk; obj.def = row.t_def; obj.lvl = row.t_lvl; obj.reino = row.t_reino;
+            obj.atk = row.t_atk;
+            obj.def = row.t_def;
+            obj.lvl = row.t_lvl;
+            obj.reino = row.t_reino;
           } else if (row.cj_tipo != null) {
             obj.tipo = row.cj_tipo;
           }
+        
           return obj;
         });
       
