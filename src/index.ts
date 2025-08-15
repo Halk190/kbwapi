@@ -52,40 +52,84 @@ export default {
         return c.json({ error: error.message }, 500);
       }
     });
-
+    
     const CHUNK_SIZE = 50; // tamaño de lotes para evitar saturar SQLite
 
+    // Tipos para tus datos
+    type Carta = {
+      id: number;
+      idGlobal?: string;
+      idFisico?: string;
+      nombre: string;
+      descripcion: string;
+      tipoCarta: string;
+    };
+    
+    type Bestia = {
+      id: number;
+      atk: number;
+      def: number;
+      lvl: number;
+      reino: string;
+      tieneHabilidadEsp: number;
+    };
+    
+    type Reina = {
+      id: number;
+      atk: number;
+      lvl: number;
+      reino: string;
+    };
+    
+    type Token = {
+      id: number;
+      atk: number;
+      def: number;
+      lvl: number;
+      reino: string;
+    };
+    
+    type Conjuro = {
+      id: number;
+      tipo: string;
+    };
+    
+    type Recurso = {
+      id: number;
+    };
+      
     // Endpoint que importa JSON desde archivo para insertar en DB
     app.post('/admin/importar-json', authMiddleware, async (c: any) => {
       try {
-        // Extraer arrays del JSON importado
-        const { cartas = [], bestias = [], reinas = [], tokens = [], conjuros = [], recursos = [] } = cartasData as any;
+        const { cartas = [], bestias = [], reinas = [], tokens = [], conjuros = [], recursos = [] } = cartasData as {
+          cartas: Carta[];
+          bestias: Bestia[];
+          reinas: Reina[];
+          tokens: Token[];
+          conjuros: Conjuro[];
+          recursos: Recurso[];
+        };
       
         // Helper para debug si hay undefined
-        const checkUndefined = (obj: any, tabla: string) => {
+        const checkUndefined = (obj: Record<string, any>, tabla: string) => {
           for (const [k, v] of Object.entries(obj)) {
-            if (v === undefined) {
-              console.error(`⚠️ En tabla ${tabla}, el campo "${k}" está undefined`);
-            }
+            if (v === undefined) console.error(`⚠️ En tabla ${tabla}, el campo "${k}" está undefined`);
           }
         };
       
-        // Función para insertar por chunks asegurando que no haya promesas
+        // Ordenar todas las listas por id ascendente
+        cartas.sort((a, b) => a.id - b.id);
+        bestias.sort((a, b) => a.id - b.id);
+        reinas.sort((a, b) => a.id - b.id);
+        tokens.sort((a, b) => a.id - b.id);
+        conjuros.sort((a, b) => a.id - b.id);
+        recursos.sort((a, b) => a.id - b.id);
+      
         const insertChunked = async (table: string, values: any[][], columns: string[]) => {
           for (let i = 0; i < values.length; i += CHUNK_SIZE) {
             const chunk = values.slice(i, i + CHUNK_SIZE);
-          
-            // Aplanar y convertir todo a string/number por si acaso
             const bindValues: (string | number | null)[] = [];
-            for (const row of chunk) {
-              for (const val of row) {
-                if (val instanceof Promise) {
-                  throw new Error('Se detectó un Promise dentro de los valores a insertar');
-                }
-                bindValues.push(val);
-              }
-            }
-          
+            for (const row of chunk) bindValues.push(...row);
             const placeholders = chunk.map(() => `(${columns.map(() => '?').join(', ')})`).join(', ');
             await env.DB.prepare(`INSERT INTO ${table} (${columns.join(',')}) VALUES ${placeholders}`)
               .bind(...bindValues)
@@ -93,101 +137,84 @@ export default {
           }
         };
       
-        // =========================
-        // 1. Insertar CARTAS
-        // =========================
-        if (cartas.length) {
-          const cartaValues = cartas.map(async (p:any) => {
+        // Procesar por chunks y subtablas relacionadas
+        for (let i = 0; i < cartas.length; i += CHUNK_SIZE) {
+          const cartasChunk = cartas.slice(i, i + CHUNK_SIZE);
+        
+          // CARTAS
+          const cartaValues = cartasChunk.map((p: Carta) => {
             const obj = {
               id: p.id,
               id_global: p.idGlobal,
               id_fisico: p.idFisico,
               nombre: p.nombre,
               descripcion: p.descripcion,
-              tipo_carta: p.tipoCarta
+              tipo_carta: p.tipoCarta,
             };
             checkUndefined(obj, 'cartas');
             return Object.values(obj);
           });
-          await insertChunked('cartas', cartaValues, ['id', 'id_global', 'id_fisico', 'nombre', 'descripcion', 'tipo_carta']);
-        }
-      
-        // =========================
-        // 2. Insertar BESTIAS
-        // =========================
-        if (bestias.length) {
-          const bestiaValues = bestias.map(async (b:any) => {
-            const obj = {
-              id: b.id,
-              atk: b.atk,
-              def: b.def,
-              lvl: b.lvl,
-              reino: b.reino,
-              tiene_habilidad_esp: b.tieneHabilidadEsp ? 1 : 0
-            };
-            checkUndefined(obj, 'bestias');
-            return Object.values(obj);
-          });
-          await insertChunked('bestias', bestiaValues, ['id', 'atk', 'def', 'lvl', 'reino', 'tiene_habilidad_esp']);
-        }
-      
-        // =========================
-        // 3. Insertar REINAS
-        // =========================
-        if (reinas.length) {
-          const reinasValues = reinas.map(async (r:any) => {
-            const obj = { id: r.id, atk: r.atk, lvl: r.lvl, reino: r.reino };
-            checkUndefined(obj, 'reinas');
-            return Object.values(obj);
-          });
-          await insertChunked('reinas', reinasValues, ['id', 'atk', 'lvl', 'reino']);
-        }
-      
-        // =========================
-        // 4. Insertar TOKENS
-        // =========================
-        if (tokens.length) {
-          const tokenValues = tokens.map(async (t:any) => {
-            const obj = { id: t.id, atk: t.atk, def: t.def, lvl: t.lvl, reino: t.reino };
-            checkUndefined(obj, 'tokens');
-            return Object.values(obj);
-          });
-          await insertChunked('tokens', tokenValues, ['id', 'atk', 'def', 'lvl', 'reino']);
-        }
-      
-        // =========================
-        // 5. Insertar CONJUROS
-        // =========================
-        if (conjuros.length) {
-          const conjuroValues = conjuros.map(async (cj:any) => {
-            const obj = { id: cj.id, tipo: cj.tipo };
-            checkUndefined(obj, 'conjuros');
-            return Object.values(obj);
-          });
-          await insertChunked('conjuros', conjuroValues, ['id', 'tipo']);
-        }
-      
-        // =========================
-        // 6. Insertar RECURSOS
-        // =========================
-        if (recursos.length) {
-          const recursoValues = recursos.map(async (rc:any) => {
-            const obj = { id: rc.id };
-            checkUndefined(obj, 'recursos');
-            return Object.values(obj);
-          });
-          await insertChunked('recursos', recursoValues, ['id']);
+          if (cartaValues.length) await insertChunked('cartas', cartaValues, ['id', 'id_global', 'id_fisico', 'nombre', 'descripcion', 'tipo_carta']);
+        
+          // BESTIAS
+          const bestiaValues = bestias.filter(b => cartasChunk.some(c => c.id === b.id))
+            .map((b: Bestia) => {
+              const obj = {
+                id: b.id,
+                atk: b.atk,
+                def: b.def,
+                lvl: b.lvl,
+                reino: b.reino,
+                tiene_habilidad_esp: b.tieneHabilidadEsp ? 1 : 0,
+              };
+              checkUndefined(obj, 'bestias');
+              return Object.values(obj);
+            });
+          if (bestiaValues.length) await insertChunked('bestias', bestiaValues, ['id', 'atk', 'def', 'lvl', 'reino', 'tiene_habilidad_esp']);
+          
+          // REINAS
+          const reinasValues = reinas.filter(r => cartasChunk.some(c => c.id === r.id))
+            .map((r: Reina) => {
+              const obj = { id: r.id, atk: r.atk, lvl: r.lvl, reino: r.reino };
+              checkUndefined(obj, 'reinas');
+              return Object.values(obj);
+            });
+          if (reinasValues.length) await insertChunked('reinas', reinasValues, ['id', 'atk', 'lvl', 'reino']);
+          
+          // TOKENS
+          const tokenValues = tokens.filter(t => cartasChunk.some(c => c.id === t.id))
+            .map((t: Token) => {
+              const obj = { id: t.id, atk: t.atk, def: t.def, lvl: t.lvl, reino: t.reino };
+              checkUndefined(obj, 'tokens');
+              return Object.values(obj);
+            });
+          if (tokenValues.length) await insertChunked('tokens', tokenValues, ['id', 'atk', 'def', 'lvl', 'reino']);
+          
+          // CONJUROS
+          const conjuroValues = conjuros.filter(cj => cartasChunk.some(c => c.id === cj.id))
+            .map((cj: Conjuro) => {
+              const obj = { id: cj.id, tipo: cj.tipo };
+              checkUndefined(obj, 'conjuros');
+              return Object.values(obj);
+            });
+          if (conjuroValues.length) await insertChunked('conjuros', conjuroValues, ['id', 'tipo']);
+          
+          // RECURSOS
+          const recursoValues = recursos.filter(rc => cartasChunk.some(c => c.id === rc.id))
+            .map((rc: Recurso) => {
+              const obj = { id: rc.id };
+              checkUndefined(obj, 'recursos');
+              return Object.values(obj);
+            });
+          if (recursoValues.length) await insertChunked('recursos', recursoValues, ['id']);
         }
       
         return c.json({ message: 'Importación finalizada' });
-      
       } catch (err: any) {
         console.error("❌ Error en importar-json:", err);
         return c.json({ error: err.message }, 500);
       }
     });
-
-
 
         return app.fetch(request, env, ctx);
     }
