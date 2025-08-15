@@ -242,14 +242,18 @@ export default {
           tipo_carta: string;
         }[];
       
-        // Helper para cargar subtablas
         const fetchSubtable = async (table: string, columns: string[], ids: number[]): Promise<Record<number, any>> => {
           const combined: Record<number, any> = {};
           const CHUNK_SIZE = 15; // evitar too many SQL variables
           for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
             const chunk = ids.slice(i, i + CHUNK_SIZE);
             const placeholders = chunk.map(() => '?').join(',');
-            const rows = await env.DB.prepare(`SELECT id, ${columns.join(',')} FROM ${table} WHERE id IN (${placeholders})`).bind(...chunk).all();
+          
+            // Armar lista de columnas dinámicamente
+            const cols = columns.length > 0 ? `, ${columns.join(',')}` : '';
+            const query = `SELECT id${cols} FROM ${table} WHERE id IN (${placeholders})`;
+          
+            const rows = await env.DB.prepare(query).bind(...chunk).all();
             for (const row of rows.results as any[]) {
               const rowTyped = row as { id: number; [key: string]: any };
               combined[rowTyped.id] = rowTyped;
