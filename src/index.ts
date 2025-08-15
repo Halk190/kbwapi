@@ -68,13 +68,13 @@ export default {
                   if (exists) continue;
                   const cols = ['id_global', 'id_fisico', 'nombre', 'descripcion', 'tipo_carta'];
                   const q = `INSERT INTO cartas (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`;
-                  // Transformamos claves
+                  console.log("Insertando carta:", p);
                   await env.DB.prepare(q).bind(
-                    p.idGlobal,   // idGlobal -> id_global
-                    p.idFisico,   // idFisico -> id_fisico
+                    p.idGlobal,
+                    p.idFisico,
                     p.nombre,
                     p.descripcion,
-                    p.tipoCarta   // tipoCarta -> tipo_carta
+                    p.tipoCarta
                   ).run();
                 }
 
@@ -94,6 +94,7 @@ export default {
                   ).bind(parentId).first();
                   if (exists) continue;
                   // Inserta en tabla bestia
+                  console.log("Insertando bestia:", b, "parentId:", parentId);
                   await env.DB.prepare(
                     `INSERT INTO bestia (id, atk, def, lvl, reino, tiene_habilidad_esp) VALUES (?, ?, ?, ?, ?, ?)`
                   ).bind(
@@ -102,7 +103,7 @@ export default {
                     b.def,
                     b.lvl,
                     b.reino,
-                    b.tieneHabilidadEsp ? 1 : 0   // transforma boolean a int
+                    b.tieneHabilidadEsp ? 1 : 0
                   ).run();
                 }
 
