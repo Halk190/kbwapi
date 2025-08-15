@@ -106,7 +106,7 @@ export default {
 
           // 📌 Bestias
           for (const b of bestias) {
-              const parentId = await getParentId(b.id);
+              const parentId = await getParentId(b);
               if (!parentId) continue;
 
               const exists = await env.DB.prepare(`SELECT id FROM bestia WHERE id = ? LIMIT 1`).bind(parentId).first();
@@ -129,7 +129,7 @@ export default {
 
           // 📌 Reinas
           for (const r of reinas) {
-              const parentId = await getParentId(r.id);
+              const parentId = await getParentId(r);
               if (!parentId) continue;
 
               const exists = await env.DB.prepare(`SELECT id FROM reina WHERE id = ? LIMIT 1`).bind(parentId).first();
@@ -150,7 +150,7 @@ export default {
 
           // 📌 Tokens
           for (const t of tokens) {
-              const parentId = await getParentId(t.id);
+              const parentId = await getParentId(t);
               if (!parentId) continue;
 
               const exists = await env.DB.prepare(`SELECT id FROM token WHERE id = ? LIMIT 1`).bind(parentId).first();
@@ -172,7 +172,7 @@ export default {
 
           // 📌 Conjuros
           for (const cj of conjuros) {
-              const parentId = await getParentId(cj.id);
+              const parentId = await getParentId(cj);
               if (!parentId) continue;
 
               const exists = await env.DB.prepare(`SELECT id FROM conjuro WHERE id = ? LIMIT 1`).bind(parentId).first();
@@ -191,7 +191,7 @@ export default {
 
           // 📌 Recursos
           for (const rc of recursos) {
-              const parentId = await getParentId(rc.id);
+              const parentId = await getParentId(rc);
               if (!parentId) continue;
 
               const exists = await env.DB.prepare(`SELECT id FROM recurso WHERE id = ? LIMIT 1`).bind(parentId).first();
