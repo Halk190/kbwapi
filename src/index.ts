@@ -232,41 +232,42 @@ export default {
     // Endpoint para obtener todas las cartas
     app.get('/allcards', userMiddleware, async (c: any) => {
       try {
-        // 1️⃣ Obtener todas las cartas
-        const cartasQuery = `
-          SELECT id, id_fisico, nombre, descripcion, tipo_carta
-          FROM cartas
-          ORDER BY id ASC
-        `;
-        const cartasResult = await env.DB.prepare(cartasQuery).all();
-        const cartas = cartasResult.results;
+        // Obtener todas las cartas
+        const cartasRows = await env.DB.prepare(`SELECT id, id_fisico, nombre, descripcion, tipo_carta FROM cartas ORDER BY id ASC`).all();
+        const cartas = cartasRows.results as { 
+          id: number;
+          id_fisico: string;
+          nombre: string;
+          descripcion: string;
+          tipo_carta: string;
+        }[];
       
-        if (cartas.length === 0) return c.json([]); // nada que devolver
+        // Helper para cargar subtablas
+        const fetchSubtable = async (table: string, columns: string[], ids: number[]): Promise<Record<number, any>> => {
+          const combined: Record<number, any> = {};
+          const CHUNK_SIZE = 15; // evitar too many SQL variables
+          for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+            const chunk = ids.slice(i, i + CHUNK_SIZE);
+            const placeholders = chunk.map(() => '?').join(',');
+            const rows = await env.DB.prepare(`SELECT id, ${columns.join(',')} FROM ${table} WHERE id IN (${placeholders})`).bind(...chunk).all();
+            for (const row of rows.results as any[]) {
+              const rowTyped = row as { id: number; [key: string]: any };
+              combined[rowTyped.id] = rowTyped;
+            }
+          }
+          return combined;
+        };
       
-        const cartaIds = cartas.map(ca => ca.id);
+        const ids = cartas.map(c => c.id as number);
       
-        // 2️⃣ Traer subtablas
-        const bestiasRows = await env.DB.prepare(
-          `SELECT * FROM bestias WHERE id IN (${cartaIds.map(() => '?').join(',')})`
-        ).bind(...cartaIds).all();
+        // Cargar subtablas
+        const bestiasMap = await fetchSubtable('bestias', ['atk','def','lvl','reino','tiene_habilidad_esp'], ids);
+        const reinasMap = await fetchSubtable('reinas', ['atk','lvl','reino'], ids);
+        const tokensMap = await fetchSubtable('tokens', ['atk','def','lvl','reino'], ids);
+        const conjurosMap = await fetchSubtable('conjuros', ['tipo'], ids);
+        const recursosMap = await fetchSubtable('recursos', [], ids);
       
-        const reinasRows = await env.DB.prepare(
-          `SELECT * FROM reinas WHERE id IN (${cartaIds.map(() => '?').join(',')})`
-        ).bind(...cartaIds).all();
-      
-        const tokensRows = await env.DB.prepare(
-          `SELECT * FROM tokens WHERE id IN (${cartaIds.map(() => '?').join(',')})`
-        ).bind(...cartaIds).all();
-      
-        const conjurosRows = await env.DB.prepare(
-          `SELECT * FROM conjuros WHERE id IN (${cartaIds.map(() => '?').join(',')})`
-        ).bind(...cartaIds).all();
-      
-        const recursosRows = await env.DB.prepare(
-          `SELECT * FROM recursos WHERE id IN (${cartaIds.map(() => '?').join(',')})`
-        ).bind(...cartaIds).all();
-      
-        // 3️⃣ Combinar datos
+        // Combinar resultados
         const result = cartas.map(ca => {
           const obj: any = {
             idFisico: ca.id_fisico,
@@ -275,28 +276,17 @@ export default {
             tipoCarta: ca.tipo_carta
           };
         
-          const b = bestiasRows.results.find(r => r.id === ca.id);
-          const r = reinasRows.results.find(rw => rw.id === ca.id);
-          const t = tokensRows.results.find(tr => tr.id === ca.id);
-          const cj = conjurosRows.results.find(cr => cr.id === ca.id);
-          const rc = recursosRows.results.find(rr => rr.id === ca.id);
-        
-          if (b) {
-            obj.atk = b.atk;
-            obj.def = b.def;
-            obj.lvl = b.lvl;
-            obj.reino = b.reino;
-            obj.tieneHabilidadEsp = b.tiene_habilidad_esp;
-          } else if (r) {
-            obj.atk = r.atk;
-            obj.lvl = r.lvl;
-            obj.reino = r.reino;
-          } else if (t) {
-            obj.atk = t.atk;
-            obj.def = t.def;
-            obj.lvl = t.lvl;
-            obj.reino = t.reino;
-          } else if (cj) {
+          if (bestiasMap[ca.id]) {
+            const b = bestiasMap[ca.id];
+            obj.atk = b.atk; obj.def = b.def; obj.lvl = b.lvl; obj.reino = b.reino; obj.tieneHabilidadEsp = b.tiene_habilidad_esp;
+          } else if (reinasMap[ca.id]) {
+            const r = reinasMap[ca.id];
+            obj.atk = r.atk; obj.lvl = r.lvl; obj.reino = r.reino;
+          } else if (tokensMap[ca.id]) {
+            const t = tokensMap[ca.id];
+            obj.atk = t.atk; obj.def = t.def; obj.lvl = t.lvl; obj.reino = t.reino;
+          } else if (conjurosMap[ca.id]) {
+            const cj = conjurosMap[ca.id];
             obj.tipo = cj.tipo;
           }
         
@@ -304,6 +294,7 @@ export default {
         });
       
         return c.json(result);
+      
       } catch (err: any) {
         console.error(err);
         return c.json({ error: err.message }, 500);
