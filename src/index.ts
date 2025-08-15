@@ -56,161 +56,126 @@ export default {
     // Endpoint que importa JSON desde archivo para insertar en DB
     app.post('/admin/importar-json', authMiddleware, async (c) => {
       try {
-    // Extraer arrays del JSON importado
-      const { cartas = [], bestias = [], reinas = [], tokens = [], conjuros = [], recursos = [] } = cartasData as any;
-
-      // Helper para debug si hay undefined
-      const checkUndefined = (obj: any, tabla: string) => {
+        // Extraer arrays del JSON importado
+        const { cartas = [], bestias = [], reinas = [], tokens = [], conjuros = [], recursos = [] } = cartasData as any;
+      
+        // Helper para debug si hay undefined
+        const checkUndefined = (obj: any, tabla: string) => {
           for (const [k, v] of Object.entries(obj)) {
-              if (v === undefined) {
-                  console.error(`⚠️ En tabla ${tabla}, el campo "${k}" está undefined`);
-              }
+            if (v === undefined) {
+              console.warn(`⚠️ En tabla ${tabla}, el campo "${k}" está undefined`);
+            }
           }
-      };
-
-      // 📌 Cartas
-      for (const p of cartas) {
-          const exists = await env.DB.prepare(
-              `SELECT id FROM cartas WHERE id_fisico = ? LIMIT 1`
-          ).bind(p.idFisico).first();
-          if (exists) continue;
-
+        };
+      
+        // Mapeo de tipoCarta a tabla
+        const tipoMap: Record<string, string> = {
+          BESTIA: 'bestias',
+          BESTIA_HABILIDAD: 'bestias',
+          REINA: 'reinas',
+          TOKEN: 'tokens',
+          CONJURO: 'conjuros',
+          RECURSO: 'recursos'
+        };
+      
+        const errores: string[] = [];
+      
+        // =========================
+        // 1. Insertar CARTAS
+        // =========================
+        const cartaValues: any[] = [];
+        for (const p of cartas) {
           const cartaDb = {
-              id_global: p.idGlobal,
-              id_fisico: p.idFisico,
-              nombre: p.nombre,
-              descripcion: p.descripcion,
-              tipo_carta: p.tipoCarta
+            id_global: p.idGlobal,
+            id_fisico: p.idFisico,
+            nombre: p.nombre,
+            descripcion: p.descripcion,
+            tipo_carta: p.tipoCarta
           };
           checkUndefined(cartaDb, 'cartas');
-
-          const cols = Object.keys(cartaDb);
-          const q = `INSERT INTO cartas (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`;
-          console.log("Insertando carta:", cartaDb);
-
-          await env.DB.prepare(q).bind(...Object.values(cartaDb)).run();
-      }
-
-      // Función para obtener id generado de carta
-      const getParentId = async (item: any) => {
-        if (item.idFisico) {
-          const row = await env.DB.prepare(`SELECT id FROM cartas WHERE id_fisico = ? LIMIT 1`)
-            .bind(item.idFisico).first();
-          return row?.id ?? null;
+          cartaValues.push(...Object.values(cartaDb));
         }
-        if (item.id) {
-          return item.id; // ya es el ID padre
+      
+        if (cartaValues.length) {
+          await env.DB.prepare(
+            `INSERT INTO cartas (id_global, id_fisico, nombre, descripcion, tipo_carta) VALUES ${cartas.map(() => "(?, ?, ?, ?, ?)").join(", ")}`
+          ).bind(...cartaValues).run();
         }
-        return null;
-      };
-
-      // 📌 Bestias
-      for (const b of bestias) {
-          const parentId = await getParentId(b);
-          if (!parentId) continue;
-
-          const exists = await env.DB.prepare(`SELECT id FROM bestias WHERE id = ? LIMIT 1`).bind(parentId).first();
-          if (exists) continue;
-
-          const bestiaDb = {
-              id: parentId,
-              atk: b.atk,
-              def: b.def,
-              lvl: b.lvl,
-              reino: b.reino,
-              tiene_habilidad_esp: b.tieneHabilidadEsp ? 1 : 0
-          };
-          checkUndefined(bestiaDb, 'bestias');
-
-          await env.DB.prepare(
-              `INSERT INTO bestias (id, atk, def, lvl, reino, tiene_habilidad_esp) VALUES (?, ?, ?, ?, ?, ?)`
-          ).bind(...Object.values(bestiaDb)).run();
-      }
-
-      // 📌 Reinas
-      for (const r of reinas) {
-          const parentId = await getParentId(r);
-          if (!parentId) continue;
-
-          const exists = await env.DB.prepare(`SELECT id FROM reinas WHERE id = ? LIMIT 1`).bind(parentId).first();
-          if (exists) continue;
-
-          const reinaDb = {
-              id: parentId,
-              atk: r.atk,
-              lvl: r.lvl,
-              reino: r.reino
-          };
-          checkUndefined(reinaDb, 'reinas');
-
-          await env.DB.prepare(
-              `INSERT INTO reinas (id, atk, lvl, reino) VALUES (?, ?, ?, ?)`
-          ).bind(...Object.values(reinaDb)).run();
-      }
-
-      // 📌 Tokens
-      for (const t of tokens) {
-          const parentId = await getParentId(t);
-          if (!parentId) continue;
-
-          const exists = await env.DB.prepare(`SELECT id FROM tokens WHERE id = ? LIMIT 1`).bind(parentId).first();
-          if (exists) continue;
-
-          const tokenDb = {
-              id: parentId,
-              atk: t.atk,
-              def: t.def,
-              lvl: t.lvl,
-              reino: t.reino
-          };
-          checkUndefined(tokenDb, 'tokens');
-
-          await env.DB.prepare(
-              `INSERT INTO tokens (id, atk, def, lvl, reino) VALUES (?, ?, ?, ?, ?)`
-          ).bind(...Object.values(tokenDb)).run();
-      }
-
-      // 📌 Conjuros
-      for (const cj of conjuros) {
-          const parentId = await getParentId(cj);
-          if (!parentId) continue;
-
-          const exists = await env.DB.prepare(`SELECT id FROM conjuros WHERE id = ? LIMIT 1`).bind(parentId).first();
-          if (exists) continue;
-
-          const conjuroDb = {
-              id: parentId,
-              tipo: cj.tipo
-          };
-          checkUndefined(conjuroDb, 'conjuros');
-
-          await env.DB.prepare(
-              `INSERT INTO conjuros (id, tipo) VALUES (?, ?)`
-          ).bind(...Object.values(conjuroDb)).run();
-      }
-
-      // 📌 Recursos
-      for (const rc of recursos) {
-          const parentId = await getParentId(rc);
-          if (!parentId) continue;
-
-          const exists = await env.DB.prepare(`SELECT id FROM recursos WHERE id = ? LIMIT 1`).bind(parentId).first();
-          if (exists) continue;
-
-          const recursoDb = { id: parentId };
-          checkUndefined(recursoDb, 'recursos');
-
-          await env.DB.prepare(
-              `INSERT INTO recursos (id) VALUES (?)`
-          ).bind(...Object.values(recursoDb)).run();
-      }
-
-      return c.json({ message: 'Importación finalizada' });
+      
+        // =========================
+        // 2. Obtener IDs generados
+        // =========================
+        const allCartas = await env.DB.prepare(`SELECT id, tipo_carta, id_fisico FROM cartas`).all<{ id: number; tipo_carta: string; id_fisico: string }>();
+        const idPorFisico = new Map(allCartas.results.map(c => [c.id_fisico, { id: c.id, tipo: c.tipo_carta }]));
+      
+        // Helper para obtener id validando tipo
+        const getIdSiTipo = (obj: any, tabla: string) => {
+          const found = idPorFisico.get(obj.idFisico);
+          if (!found) return null;
+          if (tipoMap[found.tipo] !== tabla) return null;
+          return found.id;
+        };
+      
+        // =========================
+        // Función genérica de inserción masiva
+        // =========================
+        const insertarMasivo = async (items: any[], tabla: string, cols: string[], mapItem: (item: any, id: number) => any) => {
+          const values: any[] = [];
+          for (const item of items) {
+            const id = getIdSiTipo(item, tabla);
+            if (!id) {
+              errores.push(`Item con JSON id=${item.id} en tabla ${tabla} no tiene carta asociada o tipo incorrecto`);
+              continue;
+            }
+            const dbItem = mapItem(item, id);
+            checkUndefined(dbItem, tabla);
+            values.push(...Object.values(dbItem));
+          }
+          if (values.length) {
+            await env.DB.prepare(
+              `INSERT INTO ${tabla} (${cols.join(", ")}) VALUES ${items.map(() => `(${cols.map(() => "?").join(", ")})`).join(", ")}`
+            ).bind(...values).run();
+          }
+        };
+      
+        // =========================
+        // 3. Insertar subtablas
+        // =========================
+        await insertarMasivo(bestias, 'bestias', ['id', 'atk', 'def', 'lvl', 'reino', 'tiene_habilidad_esp'],
+          (b, id) => ({
+            id,
+            atk: b.atk,
+            def: b.def,
+            lvl: b.lvl,
+            reino: b.reino,
+            tiene_habilidad_esp: b.tieneHabilidadEsp ? 1 : 0
+          })
+        );
+      
+        await insertarMasivo(reinas, 'reinas', ['id', 'atk', 'lvl', 'reino'],
+          (r, id) => ({ id, atk: r.atk, lvl: r.lvl, reino: r.reino })
+        );
+      
+        await insertarMasivo(tokens, 'tokens', ['id', 'atk', 'def', 'lvl', 'reino'],
+          (t, id) => ({ id, atk: t.atk, def: t.def, lvl: t.lvl, reino: t.reino })
+        );
+      
+        await insertarMasivo(conjuros, 'conjuros', ['id', 'tipo'],
+          (cj, id) => ({ id, tipo: cj.tipo })
+        );
+      
+        await insertarMasivo(recursos, 'recursos', ['id'],
+          (rc, id) => ({ id })
+        );
+      
+        return c.json({ message: 'Importación finalizada', errores });
+      
       } catch (err: any) {
-          console.error("❌ Error en importar-json:", err);
-          return c.json({ error: err.message }, 500);
+        console.error("❌ Error en importar-json:", err);
+        return c.json({ error: err.message }, 500);
       }
     });
+
 
         return app.fetch(request, env, ctx);
     }
