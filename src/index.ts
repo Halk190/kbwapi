@@ -92,14 +92,21 @@ export default {
           }
 
           // Función para obtener id generado de carta
-          const getParentId = async (id_fisico: string) => {
-              const row = await env.DB.prepare(`SELECT id FROM cartas WHERE id_fisico = ? LIMIT 1`).bind(id_fisico).first();
+          const getParentId = async (item: any) => {
+            if (item.idFisico) {
+              const row = await env.DB.prepare(`SELECT id FROM cartas WHERE id_fisico = ? LIMIT 1`)
+                .bind(item.idFisico).first();
               return row?.id ?? null;
+            }
+            if (item.id) {
+              return item.id; // ya es el ID padre
+            }
+            return null;
           };
 
           // 📌 Bestias
           for (const b of bestias) {
-              const parentId = await getParentId(b.idFisico);
+              const parentId = await getParentId(b.id);
               if (!parentId) continue;
 
               const exists = await env.DB.prepare(`SELECT id FROM bestia WHERE id = ? LIMIT 1`).bind(parentId).first();
@@ -122,7 +129,7 @@ export default {
 
           // 📌 Reinas
           for (const r of reinas) {
-              const parentId = await getParentId(r.idFisico);
+              const parentId = await getParentId(r.id);
               if (!parentId) continue;
 
               const exists = await env.DB.prepare(`SELECT id FROM reina WHERE id = ? LIMIT 1`).bind(parentId).first();
@@ -143,7 +150,7 @@ export default {
 
           // 📌 Tokens
           for (const t of tokens) {
-              const parentId = await getParentId(t.idFisico);
+              const parentId = await getParentId(t.id);
               if (!parentId) continue;
 
               const exists = await env.DB.prepare(`SELECT id FROM token WHERE id = ? LIMIT 1`).bind(parentId).first();
@@ -165,7 +172,7 @@ export default {
 
           // 📌 Conjuros
           for (const cj of conjuros) {
-              const parentId = await getParentId(cj.idFisico);
+              const parentId = await getParentId(cj.id);
               if (!parentId) continue;
 
               const exists = await env.DB.prepare(`SELECT id FROM conjuro WHERE id = ? LIMIT 1`).bind(parentId).first();
@@ -184,7 +191,7 @@ export default {
 
           // 📌 Recursos
           for (const rc of recursos) {
-              const parentId = await getParentId(rc.idFisico);
+              const parentId = await getParentId(rc.id);
               if (!parentId) continue;
 
               const exists = await env.DB.prepare(`SELECT id FROM recurso WHERE id = ? LIMIT 1`).bind(parentId).first();
