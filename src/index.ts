@@ -60,14 +60,22 @@ export default {
                 // Extraer los arrays desde el JSON importado
                 const { cartas = [], bestias = [], reinas = [], tokens = [], conjuros = [], recursos = [] } = cartasData as any;
 
-                // Insertar cartas (padres)
+                // Inserta en tabla cartas (padres)
                 for (const p of cartas) {
-                    const exists = await env.DB.prepare(`SELECT id FROM cartas WHERE id_fisico = ? LIMIT 1`).bind(p.id_fisico).first();
-                    if (exists) continue;
-
-                    const cols = ['id_global', 'id_fisico', 'nombre', 'descripcion', 'tipo_carta'];
-                    const q = `INSERT INTO cartas (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`;
-                    await env.DB.prepare(q).bind(p.id_global, p.id_fisico, p.nombre, p.descripcion, p.tipo_carta).run();
+                  const exists = await env.DB.prepare(
+                    `SELECT id FROM cartas WHERE id_fisico = ? LIMIT 1`
+                  ).bind(p.id_fisico).first();
+                  if (exists) continue;
+                  const cols = ['id_global', 'id_fisico', 'nombre', 'descripcion', 'tipo_carta'];
+                  const q = `INSERT INTO cartas (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`;
+                  // Transformamos claves
+                  await env.DB.prepare(q).bind(
+                    p.idGlobal,   // idGlobal -> id_global
+                    p.idFisico,   // idFisico -> id_fisico
+                    p.nombre,
+                    p.descripcion,
+                    p.tipoCarta   // tipoCarta -> tipo_carta
+                  ).run();
                 }
 
                 // Función para obtener el id generado de carta
@@ -76,15 +84,26 @@ export default {
                     return row?.id ?? null;
                 };
 
-                // Insertar bestias
+                // Bestias
                 for (const b of bestias) {
-                    const parentId = await getParentId(b.id_fisico);
-                    if (!parentId) continue;
-                    const exists = await env.DB.prepare(`SELECT id FROM bestia WHERE id = ? LIMIT 1`).bind(parentId).first();
-                    if (exists) continue;
-                    await env.DB.prepare(
-                        `INSERT INTO bestia (id, atk, def, lvl, reino, tiene_habilidad_esp) VALUES (?, ?, ?, ?, ?, ?)`
-                    ).bind(parentId, b.atk, b.def, b.lvl, b.reino, b.tiene_habilidad_esp ? 1 : 0).run();
+                  const parentId = await getParentId(b.id_fisico);
+                  if (!parentId) continue;
+
+                  const exists = await env.DB.prepare(
+                    `SELECT id FROM bestia WHERE id = ? LIMIT 1`
+                  ).bind(parentId).first();
+                  if (exists) continue;
+                  // Inserta en tabla bestia
+                  await env.DB.prepare(
+                    `INSERT INTO bestia (id, atk, def, lvl, reino, tiene_habilidad_esp) VALUES (?, ?, ?, ?, ?, ?)`
+                  ).bind(
+                    parentId,
+                    b.atk,
+                    b.def,
+                    b.lvl,
+                    b.reino,
+                    b.tieneHabilidadEsp ? 1 : 0   // transforma boolean a int
+                  ).run();
                 }
 
                 // Insertar reinas
