@@ -232,24 +232,20 @@ export default {
     // Endpoint para obtener todas las cartas
     app.get('/allcards', userMiddleware, async (c: any) => {
       try {
-        const limit = parseInt(c.req.query.limit as string) || 50;
-        const offset = parseInt(c.req.query.offset as string) || 0;
-      
-        // 1️⃣ Obtener cartas paginadas
+        // 1️⃣ Obtener todas las cartas
         const cartasQuery = `
           SELECT id, id_fisico, nombre, descripcion, tipo_carta
           FROM cartas
           ORDER BY id ASC
-          LIMIT ? OFFSET ?
         `;
-        const cartasResult = await env.DB.prepare(cartasQuery).bind(limit, offset).all();
+        const cartasResult = await env.DB.prepare(cartasQuery).all();
         const cartas = cartasResult.results;
       
         if (cartas.length === 0) return c.json([]); // nada que devolver
       
         const cartaIds = cartas.map(ca => ca.id);
       
-        // 2️⃣ Traer subtablas solo de estas cartas
+        // 2️⃣ Traer subtablas
         const bestiasRows = await env.DB.prepare(
           `SELECT * FROM bestias WHERE id IN (${cartaIds.map(() => '?').join(',')})`
         ).bind(...cartaIds).all();
@@ -279,7 +275,6 @@ export default {
             tipoCarta: ca.tipo_carta
           };
         
-          // buscar en subtablas
           const b = bestiasRows.results.find(r => r.id === ca.id);
           const r = reinasRows.results.find(rw => rw.id === ca.id);
           const t = tokensRows.results.find(tr => tr.id === ca.id);
@@ -303,8 +298,6 @@ export default {
             obj.reino = t.reino;
           } else if (cj) {
             obj.tipo = cj.tipo;
-          } else if (rc) {
-            // No agregar nada extra por ahora
           }
         
           return obj;
