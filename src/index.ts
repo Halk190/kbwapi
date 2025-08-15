@@ -235,56 +235,65 @@ export default {
         const limit = parseInt(c.req.query.limit as string) || 50;
         const offset = parseInt(c.req.query.offset as string) || 0;
       
-        const query = `
-          WITH paged AS (
-            SELECT id
-            FROM cartas
-            ORDER BY id ASC
-            LIMIT ? OFFSET ?
-          )
-          SELECT 
-            ca.id_fisico, ca.nombre, ca.descripcion, ca.tipo_carta,
-            b.atk AS b_atk, b.def AS b_def, b.lvl AS b_lvl, b.reino AS b_reino, b.tiene_habilidad_esp,
-            r.atk AS r_atk, r.lvl AS r_lvl, r.reino AS r_reino,
-            t.atk AS t_atk, t.def AS t_def, t.lvl AS t_lvl, t.reino AS t_reino,
-            cj.tipo AS cj_tipo
-          FROM cartas ca
-          JOIN paged p ON ca.id = p.id
-          LEFT JOIN bestias b ON ca.id = b.id
-          LEFT JOIN reinas r ON ca.id = r.id
-          LEFT JOIN tokens t ON ca.id = t.id
-          LEFT JOIN conjuros cj ON ca.id = cj.id
-          ORDER BY ca.id ASC
+        // 1️⃣ Obtener cartas con paging
+        const cartasQuery = `
+          SELECT id, id_fisico, nombre, descripcion, tipo_carta
+          FROM cartas
+          ORDER BY id ASC
+          LIMIT ? OFFSET ?
         `;
+        const cartasRows = await env.DB.prepare(cartasQuery).bind(limit, offset).all();
+        const cartas = cartasRows.results;
       
-        const rows = await env.DB.prepare(query).bind(limit, offset).all();
+        if (!cartas.length) return c.json([]);
       
-        const result = rows.results.map((row: any) => {
+        const cartaIds = cartas.map((c: any) => c.id);
+      
+        // 2️⃣ Traer subtablas solo para estas cartas
+        const bestiasRows = await env.DB.prepare(`SELECT * FROM bestias WHERE id IN (${cartaIds.map(() => '?').join(',')})`)
+          .bind(...cartaIds)
+          .all();
+        const reinasRows = await env.DB.prepare(`SELECT * FROM reinas WHERE id IN (${cartaIds.map(() => '?').join(',')})`)
+          .bind(...cartaIds)
+          .all();
+        const tokensRows = await env.DB.prepare(`SELECT * FROM tokens WHERE id IN (${cartaIds.map(() => '?').join(',')})`)
+          .bind(...cartaIds)
+          .all();
+        const conjurosRows = await env.DB.prepare(`SELECT * FROM conjuros WHERE id IN (${cartaIds.map(() => '?').join(',')})`)
+          .bind(...cartaIds)
+          .all();
+      
+        // 3️⃣ Armar respuesta combinando cada carta con su subtabla
+        const result = cartas.map((c: any) => {
           const obj: any = {
-            idFisico: row.id_fisico,
-            nombre: row.nombre,
-            descripcion: row.descripcion,
-            tipoCarta: row.tipo_carta
+            idFisico: c.id_fisico,
+            nombre: c.nombre,
+            descripcion: c.descripcion,
+            tipoCarta: c.tipo_carta
           };
         
-          // Agregar subtablas según existan
-          if (row.b_atk != null) {
-            obj.atk = row.b_atk;
-            obj.def = row.b_def;
-            obj.lvl = row.b_lvl;
-            obj.reino = row.b_reino;
-            obj.tieneHabilidadEsp = row.tiene_habilidad_esp;
-          } else if (row.r_atk != null) {
-            obj.atk = row.r_atk;
-            obj.lvl = row.r_lvl;
-            obj.reino = row.r_reino;
-          } else if (row.t_atk != null) {
-            obj.atk = row.t_atk;
-            obj.def = row.t_def;
-            obj.lvl = row.t_lvl;
-            obj.reino = row.t_reino;
-          } else if (row.cj_tipo != null) {
-            obj.tipo = row.cj_tipo;
+          const bestia = bestiasRows.results.find((b: any) => b.id === c.id);
+          const reina = reinasRows.results.find((r: any) => r.id === c.id);
+          const token = tokensRows.results.find((t: any) => t.id === c.id);
+          const conjuro = conjurosRows.results.find((cj: any) => cj.id === c.id);
+        
+          if (bestia) {
+            obj.atk = bestia.atk;
+            obj.def = bestia.def;
+            obj.lvl = bestia.lvl;
+            obj.reino = bestia.reino;
+            obj.tieneHabilidadEsp = bestia.tiene_habilidad_esp;
+          } else if (reina) {
+            obj.atk = reina.atk;
+            obj.lvl = reina.lvl;
+            obj.reino = reina.reino;
+          } else if (token) {
+            obj.atk = token.atk;
+            obj.def = token.def;
+            obj.lvl = token.lvl;
+            obj.reino = token.reino;
+          } else if (conjuro) {
+            obj.tipo = conjuro.tipo;
           }
         
           return obj;
