@@ -10,7 +10,8 @@ import cartasData from './resources/dataset/cartas.json';
 
 export interface Env {
     DB: D1Database;
-    SECRET: SecretsStoreSecret;
+    ADMIN_TOKEN: SecretsStoreSecret;
+    USER_TOKEN: SecretsStoreSecret;
 }
 
 export default {
@@ -21,10 +22,22 @@ export default {
     app.use('*', async (c, next) => cors()(c, next));
 
     // Obtener secreto para auth
-    const secret = await env.SECRET.get();
+    const adminSecret = await env.ADMIN_TOKEN.get();
+    const userSecret = await env.USER_TOKEN.get();
+
+    // Admin (token fijo)
+    const adminMiddleware = async (c: Context, next: Next) => {
+      const authHeader = c.req.header('Authorization');
+      if (!authHeader) return c.json({ error: 'Unauthorized' }, 401);
+    
+      const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
+      if (token !== adminSecret) return c.json({ error: 'Unauthorized' }, 401);
+    
+      return next();
+    };
 
     // Middleware para autenticar vía Bearer token
-    const authMiddleware = async (c: Context, next: Next) => {
+    const userMiddleware = async (c: Context, next: Next) => {
       const authHeader = c.req.header('Authorization');
       if (!authHeader) return c.json({ error: 'Unauthorized' }, 401);
 
@@ -32,16 +45,16 @@ export default {
         ? authHeader.substring(7)
         : authHeader;
 
-      if (token !== secret) return c.json({ error: 'Unauthorized' }, 401);
+      if (token !== userSecret) return c.json({ error: 'Unauthorized' }, 401);
 
       return next();
     };
 
     // Endpoints REST CRUD
-    app.all('/rest/*', authMiddleware, handleRest);
+    app.all('/rest/*', userMiddleware, handleRest);
 
     // Endpoint para ejecutar consultas SQL arbitrarias
-    app.post('/query', authMiddleware, async (c) => {
+    app.post('/query', userMiddleware, async (c) => {
       try {
         const { query, params } = await c.req.json();
         if (!query) return c.json({ error: 'Query is required' }, 400);
@@ -99,7 +112,7 @@ export default {
     };
       
     // Endpoint que importa JSON desde archivo para insertar en DB
-    app.post('/admin/importar-json', authMiddleware, async (c: any) => {
+    app.post('/admin/importar-json', adminMiddleware, async (c: any) => {
       try {
         const { cartas = [], bestias = [], reinas = [], tokens = [], conjuros = [], recursos = [] } = cartasData as {
           cartas: Carta[];
@@ -212,6 +225,55 @@ export default {
         return c.json({ message: 'Importación finalizada' });
       } catch (err: any) {
         console.error("❌ Error en importar-json:", err);
+        return c.json({ error: err.message }, 500);
+      }
+    });
+
+    app.get('/allcards', userMiddleware ,async (c: any) => {
+      try {
+        const limit = parseInt(c.req.query.limit as string) || 50;
+        const offset = parseInt(c.req.query.offset as string) || 0;
+      
+        const query = `
+          SELECT 
+            ca.id_fisico, ca.nombre, ca.descripcion, ca.tipo_carta,
+            b.atk AS b_atk, b.def AS b_def, b.lvl AS b_lvl, b.reino AS b_reino, b.tiene_habilidad_esp,
+            r.atk AS r_atk, r.lvl AS r_lvl, r.reino AS r_reino,
+            t.atk AS t_atk, t.def AS t_def, t.lvl AS t_lvl, t.reino AS t_reino,
+            cj.tipo AS cj_tipo
+          FROM cartas ca
+          LEFT JOIN bestias b ON ca.id = b.id
+          LEFT JOIN reinas r ON ca.id = r.id
+          LEFT JOIN tokens t ON ca.id = t.id
+          LEFT JOIN conjuros cj ON ca.id = cj.id
+          ORDER BY ca.id ASC
+          LIMIT ? OFFSET ?
+        `;
+      
+        const rows = await env.DB.prepare(query).bind(limit, offset).all();
+      
+        const result = rows.results.map((row: any) => {
+          const obj: any = {
+            idFisico: row.id_fisico,
+            nombre: row.nombre,
+            descripcion: row.descripcion,
+            tipoCarta: row.tipo_carta
+          };
+          if (row.b_atk != null) {
+            obj.atk = row.b_atk; obj.def = row.b_def; obj.lvl = row.b_lvl; obj.reino = row.b_reino; obj.tieneHabilidadEsp = row.tiene_habilidad_esp;
+          } else if (row.r_atk != null) {
+            obj.atk = row.r_atk; obj.lvl = row.r_lvl; obj.reino = row.r_reino;
+          } else if (row.t_atk != null) {
+            obj.atk = row.t_atk; obj.def = row.t_def; obj.lvl = row.t_lvl; obj.reino = row.t_reino;
+          } else if (row.cj_tipo != null) {
+            obj.tipo = row.cj_tipo;
+          }
+          return obj;
+        });
+      
+        return c.json(result);
+      } catch (err: any) {
+        console.error(err);
         return c.json({ error: err.message }, 500);
       }
     });
