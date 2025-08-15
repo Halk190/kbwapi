@@ -235,21 +235,21 @@ export default {
         const limit = parseInt(c.req.query.limit as string) || 50;
         const offset = parseInt(c.req.query.offset as string) || 0;
       
-        // Traer cartas paginadas
-        const cartasRows = await env.DB.prepare(`
+        // 1️⃣ Obtener cartas paginadas
+        const cartasQuery = `
           SELECT id, id_fisico, nombre, descripcion, tipo_carta
           FROM cartas
           ORDER BY id ASC
           LIMIT ? OFFSET ?
-        `).bind(limit, offset).all();
-        
-        const cartas = cartasRows.results;
-        
-        if (!cartas.length) return c.json([]);
-        
-        const cartaIds = cartas.map((c: any) => c.id);
-        
-        // Traer subtablas por IDs
+        `;
+        const cartasResult = await env.DB.prepare(cartasQuery).bind(limit, offset).all();
+        const cartas = cartasResult.results;
+      
+        if (cartas.length === 0) return c.json([]); // nada que devolver
+      
+        const cartaIds = cartas.map(ca => ca.id);
+      
+        // 2️⃣ Traer subtablas solo de estas cartas
         const bestiasRows = await env.DB.prepare(
           `SELECT * FROM bestias WHERE id IN (${cartaIds.map(() => '?').join(',')})`
         ).bind(...cartaIds).all();
@@ -266,37 +266,45 @@ export default {
           `SELECT * FROM conjuros WHERE id IN (${cartaIds.map(() => '?').join(',')})`
         ).bind(...cartaIds).all();
       
-        // Combinar cada carta con su subtabla (solo el primero que coincida)
-        const result = cartas.map((c: any) => {
+        const recursosRows = await env.DB.prepare(
+          `SELECT * FROM recursos WHERE id IN (${cartaIds.map(() => '?').join(',')})`
+        ).bind(...cartaIds).all();
+      
+        // 3️⃣ Combinar datos
+        const result = cartas.map(ca => {
           const obj: any = {
-            idFisico: c.id_fisico,
-            nombre: c.nombre,
-            descripcion: c.descripcion,
-            tipoCarta: c.tipo_carta
+            idFisico: ca.id_fisico,
+            nombre: ca.nombre,
+            descripcion: ca.descripcion,
+            tipoCarta: ca.tipo_carta
           };
         
-          const bestia = bestiasRows.results.find((b: any) => b.id === c.id);
-          const reina = reinasRows.results.find((r: any) => r.id === c.id);
-          const token = tokensRows.results.find((t: any) => t.id === c.id);
-          const conjuro = conjurosRows.results.find((cj: any) => cj.id === c.id);
+          // buscar en subtablas
+          const b = bestiasRows.results.find(r => r.id === ca.id);
+          const r = reinasRows.results.find(rw => rw.id === ca.id);
+          const t = tokensRows.results.find(tr => tr.id === ca.id);
+          const cj = conjurosRows.results.find(cr => cr.id === ca.id);
+          const rc = recursosRows.results.find(rr => rr.id === ca.id);
         
-          if (bestia) {
-            obj.atk = bestia.atk;
-            obj.def = bestia.def;
-            obj.lvl = bestia.lvl;
-            obj.reino = bestia.reino;
-            obj.tieneHabilidadEsp = bestia.tiene_habilidad_esp;
-          } else if (reina) {
-            obj.atk = reina.atk;
-            obj.lvl = reina.lvl;
-            obj.reino = reina.reino;
-          } else if (token) {
-            obj.atk = token.atk;
-            obj.def = token.def;
-            obj.lvl = token.lvl;
-            obj.reino = token.reino;
-          } else if (conjuro) {
-            obj.tipo = conjuro.tipo;
+          if (b) {
+            obj.atk = b.atk;
+            obj.def = b.def;
+            obj.lvl = b.lvl;
+            obj.reino = b.reino;
+            obj.tieneHabilidadEsp = b.tiene_habilidad_esp;
+          } else if (r) {
+            obj.atk = r.atk;
+            obj.lvl = r.lvl;
+            obj.reino = r.reino;
+          } else if (t) {
+            obj.atk = t.atk;
+            obj.def = t.def;
+            obj.lvl = t.lvl;
+            obj.reino = t.reino;
+          } else if (cj) {
+            obj.tipo = cj.tipo;
+          } else if (rc) {
+            // No agregar nada extra por ahora
           }
         
           return obj;
