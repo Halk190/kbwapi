@@ -235,35 +235,38 @@ export default {
         const limit = parseInt(c.req.query.limit as string) || 50;
         const offset = parseInt(c.req.query.offset as string) || 0;
       
-        // 1️⃣ Obtener cartas con paging
-        const cartasQuery = `
+        // Traer cartas paginadas
+        const cartasRows = await env.DB.prepare(`
           SELECT id, id_fisico, nombre, descripcion, tipo_carta
           FROM cartas
           ORDER BY id ASC
           LIMIT ? OFFSET ?
-        `;
-        const cartasRows = await env.DB.prepare(cartasQuery).bind(limit, offset).all();
+        `).bind(limit, offset).all();
+        
         const cartas = cartasRows.results;
-      
+        
         if (!cartas.length) return c.json([]);
-      
+        
         const cartaIds = cartas.map((c: any) => c.id);
+        
+        // Traer subtablas por IDs
+        const bestiasRows = await env.DB.prepare(
+          `SELECT * FROM bestias WHERE id IN (${cartaIds.map(() => '?').join(',')})`
+        ).bind(...cartaIds).all();
       
-        // 2️⃣ Traer subtablas solo para estas cartas
-        const bestiasRows = await env.DB.prepare(`SELECT * FROM bestias WHERE id IN (${cartaIds.map(() => '?').join(',')})`)
-          .bind(...cartaIds)
-          .all();
-        const reinasRows = await env.DB.prepare(`SELECT * FROM reinas WHERE id IN (${cartaIds.map(() => '?').join(',')})`)
-          .bind(...cartaIds)
-          .all();
-        const tokensRows = await env.DB.prepare(`SELECT * FROM tokens WHERE id IN (${cartaIds.map(() => '?').join(',')})`)
-          .bind(...cartaIds)
-          .all();
-        const conjurosRows = await env.DB.prepare(`SELECT * FROM conjuros WHERE id IN (${cartaIds.map(() => '?').join(',')})`)
-          .bind(...cartaIds)
-          .all();
+        const reinasRows = await env.DB.prepare(
+          `SELECT * FROM reinas WHERE id IN (${cartaIds.map(() => '?').join(',')})`
+        ).bind(...cartaIds).all();
       
-        // 3️⃣ Armar respuesta combinando cada carta con su subtabla
+        const tokensRows = await env.DB.prepare(
+          `SELECT * FROM tokens WHERE id IN (${cartaIds.map(() => '?').join(',')})`
+        ).bind(...cartaIds).all();
+      
+        const conjurosRows = await env.DB.prepare(
+          `SELECT * FROM conjuros WHERE id IN (${cartaIds.map(() => '?').join(',')})`
+        ).bind(...cartaIds).all();
+      
+        // Combinar cada carta con su subtabla (solo el primero que coincida)
         const result = cartas.map((c: any) => {
           const obj: any = {
             idFisico: c.id_fisico,
