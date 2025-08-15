@@ -53,7 +53,7 @@ export default {
       }
     });
     
-    const CHUNK_SIZE = 50; // tamaño de lotes para evitar saturar SQLite
+    const CHUNK_SIZE = 15; // tamaño de lotes para evitar saturar SQLite
 
     // Tipos para tus datos
     type Carta = {
