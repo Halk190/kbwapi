@@ -70,13 +70,25 @@ export default {
           }
         };
       
-        // Función para insertar por chunks
-        const insertChunked = async (table: string, values: any[], columns: string[]) => {
+        // Función para insertar por chunks asegurando que no haya promesas
+        const insertChunked = async (table: string, values: any[][], columns: string[]) => {
           for (let i = 0; i < values.length; i += CHUNK_SIZE) {
             const chunk = values.slice(i, i + CHUNK_SIZE);
+          
+            // Aplanar y convertir todo a string/number por si acaso
+            const bindValues: (string | number | null)[] = [];
+            for (const row of chunk) {
+              for (const val of row) {
+                if (val instanceof Promise) {
+                  throw new Error('Se detectó un Promise dentro de los valores a insertar');
+                }
+                bindValues.push(val);
+              }
+            }
+          
             const placeholders = chunk.map(() => `(${columns.map(() => '?').join(', ')})`).join(', ');
             await env.DB.prepare(`INSERT INTO ${table} (${columns.join(',')}) VALUES ${placeholders}`)
-              .bind(...chunk.flat())
+              .bind(...bindValues)
               .run();
           }
         };
