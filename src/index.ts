@@ -262,7 +262,7 @@ export default {
           if (!validReinos.includes(r)) return c.json({ error: `Reino inválido: ${r}. Válidos: ${validReinos.join(", ")}` }, 400);
         }
       
-        // Mapear tipos a subtablas
+        // Mapear tipos
         const tipoMap: Record<string, { table: "bestias"|"reinas"|"tokens"|"cartas" }> = {
           BESTIA_NORMAL:   { table: "bestias" },
           BESTIA_HABILIDAD:{ table: "bestias" },
@@ -276,7 +276,7 @@ export default {
           if (!tipoMap[t]) return c.json({ error: `Tipo inválido: ${t}` }, 400);
         }
       
-        // Función DRY para traer subtablas
+        // Función para subtablas
         const fetchSubtable = async (table: "bestias"|"reinas"|"tokens", columns: string[], ids: number[]): Promise<Record<number, any>> => {
           const combined: Record<number, any> = {};
           if (!ids.length) return combined;
@@ -291,17 +291,31 @@ export default {
           return combined;
         };
       
-        // 3) Obtener cartas base
+        // 3) Si idFisico -> prioridad, ignorar lo demás
+        if (rawIdFisico) {
+          const rows = await env.DB.prepare("SELECT * FROM cartas WHERE id_fisico = ?").bind(rawIdFisico).all();
+          if (!rows.results.length) return c.json([]);
+          const carta = rows.results[0];
+          return c.json([{
+            idFisico: carta.id_fisico,
+            nombre: carta.nombre,
+            descripcion: carta.descripcion,
+            tipoCarta: carta.tipo_carta
+          }]);
+        }
+      
+        // 4) Obtener cartas base por tipo/nombre
         let cartas: any[] = [];
-
         if (tipos.length) {
-          // Buscar por tipos directamente
           const placeholders = tipos.map(() => "?").join(",");
           const rows = await env.DB.prepare(`SELECT * FROM cartas WHERE tipo_carta IN (${placeholders})`).bind(...tipos).all();
           cartas = rows.results as any[];
+        } else if (rawNombre) {
+          const rows = await env.DB.prepare("SELECT * FROM cartas WHERE LOWER(nombre) LIKE ?").bind(`%${rawNombre.toLowerCase()}%`).all();
+          cartas = rows.results as any[];
         }
-
-        // Bloque adicional: si hay reino/nivel se buscan en subtablas
+      
+        // 5) Buscar en subtablas si hay reino/nivel
         let subCartas: any[] = [];
         if (reinos.length || nivel !== undefined) {
           for (const sub of subtables) {
@@ -318,26 +332,29 @@ export default {
               query += " AND s.lvl = ?";
               params.push(nivel);
             }
+            if (rawNombre) {
+              query += " AND LOWER(c.nombre) LIKE ?";
+              params.push(`%${rawNombre.toLowerCase()}%`);
+            }
             const rows = await env.DB.prepare(query).bind(...params).all();
             subCartas.push(...rows.results);
           }
         }
-
-        // Unir ambas colecciones (tipo + reino/nivel)
+      
+        // 6) Unir ambas colecciones
         let todas = [...cartas, ...subCartas];
-
-        // Eliminar duplicados si llegasen a cruzarse
         const seen = new Set();
         todas = todas.filter(c => {
           if (seen.has(c.id)) return false;
           seen.add(c.id);
           return true;
         });
+        if (!todas.length) return c.json([]);
       
-        const ids = cartas.map(c => c.id);
+        // 7) Enriquecer con subtablas
+        const ids = todas.map(c => c.id);
+        const tiposSet = new Set(todas.map(c => c.tipo_carta));
       
-        // 4) Traer subtablas según resultados
-        const tiposSet = new Set(cartas.map(c => c.tipo_carta));
         const bestiasMap = tiposSet.has("BESTIA_NORMAL") || tiposSet.has("BESTIA_HABILIDAD")
           ? await fetchSubtable("bestias", subtables.find(s => s.name === "bestias")!.cols, ids)
           : {};
@@ -348,30 +365,8 @@ export default {
           ? await fetchSubtable("tokens", subtables.find(s => s.name === "tokens")!.cols, ids)
           : {};
       
-        // 5) Filtrar combinando todos los filtros
-        const filtered = cartas.filter(ca => {
-          const tipoTabla = tipoMap[ca.tipo_carta].table;
-          const extra = bestiasMap[ca.id] || reinasMap[ca.id] || tokensMap[ca.id];
-        
-          // Tipo
-          if (tipos.length && !tipos.includes(ca.tipo_carta)) return false;
-        
-          // Nivel y Reino solo aplican si la carta tiene subtabla
-          if (extra) {
-            if (nivel !== undefined && extra.lvl !== nivel) return false;
-            if (reinos.length && !reinos.includes(extra.reino)) return false;
-          }
-        
-          // Nombre parcial
-          if (rawNombre && !ca.nombre.toLowerCase().includes(rawNombre.toLowerCase())) return false;
-        
-          return true;
-        });
-      
-        if (!filtered.length) return c.json([]);
-      
-        // 6) Merge final
-        const result = filtered.map(ca => {
+        // 8) Merge final
+        const result = todas.map(ca => {
           const obj: any = {
             idFisico: ca.id_fisico,
             nombre: ca.nombre,
