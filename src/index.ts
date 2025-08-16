@@ -239,7 +239,6 @@ export default {
     ];
 
     // Endpoint para Buscar cartas con filtros
-// Endpoint para Buscar cartas con filtros
     app.get("/search-cards", userMiddleware, async (c) => {
       try {
         // 1) Leer parámetros
@@ -294,17 +293,46 @@ export default {
       
         // 3) Obtener cartas base
         let cartas: any[] = [];
-        if (rawIdFisico) {
-          const rows = await env.DB.prepare("SELECT * FROM cartas WHERE id_fisico = ?").bind(rawIdFisico).all();
-          cartas = rows.results as any[];
-        } else if (rawNombre) {
-          const rows = await env.DB.prepare("SELECT * FROM cartas WHERE LOWER(nombre) LIKE ?").bind(`%${rawNombre.toLowerCase()}%`).all();
-          cartas = rows.results as any[];
-        } else {
-          const rows = await env.DB.prepare("SELECT * FROM cartas").all();
+
+        if (tipos.length) {
+          // Buscar por tipos directamente
+          const placeholders = tipos.map(() => "?").join(",");
+          const rows = await env.DB.prepare(`SELECT * FROM cartas WHERE tipo_carta IN (${placeholders})`).bind(...tipos).all();
           cartas = rows.results as any[];
         }
-        if (!cartas.length) return c.json([]);
+
+        // Bloque adicional: si hay reino/nivel se buscan en subtablas
+        let subCartas: any[] = [];
+        if (reinos.length || nivel !== undefined) {
+          for (const sub of subtables) {
+            let query = `SELECT c.*, s.* 
+                        FROM cartas c 
+                        JOIN ${sub.name} s ON c.id = s.id 
+                        WHERE 1=1`;
+            const params: any[] = [];
+            if (reinos.length) {
+              query += ` AND s.reino IN (${reinos.map(() => "?").join(",")})`;
+              params.push(...reinos);
+            }
+            if (nivel !== undefined) {
+              query += " AND s.lvl = ?";
+              params.push(nivel);
+            }
+            const rows = await env.DB.prepare(query).bind(...params).all();
+            subCartas.push(...rows.results);
+          }
+        }
+
+        // Unir ambas colecciones (tipo + reino/nivel)
+        let todas = [...cartas, ...subCartas];
+
+        // Eliminar duplicados si llegasen a cruzarse
+        const seen = new Set();
+        todas = todas.filter(c => {
+          if (seen.has(c.id)) return false;
+          seen.add(c.id);
+          return true;
+        });
       
         const ids = cartas.map(c => c.id);
       
