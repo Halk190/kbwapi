@@ -308,112 +308,204 @@ export default {
     // Endpoint para filtrar cartas por tipo y reino
     app.get("/filter-cards", userMiddleware, async (c) => {
       try {
-        // Recibir query params tipo y reino
-        const tiposParam = (c.req.query("tipo") as string | undefined)?.toUpperCase();
-        const reinoParam = (c.req.query("reino") as string | undefined)?.toUpperCase();
+        // 1) Leer y normalizar parámetros
+        const rawTipo = c.req.query("tipo") ?? undefined;   // ej: "conjuro normal, bestia_habilidad"
+        const rawReino = c.req.query("reino") ?? undefined; // ej: "natura,pyro"
       
-        // Validar reino si existe
+        // Normaliza: a MAYÚSCULAS y espacios -> "_"
+        const tipos: string[] = rawTipo
+          ? Array.from(
+              new Set(
+                rawTipo
+                  .split(",")
+                  .map(s => s.trim())
+                  .filter(Boolean)
+                  .map(s => s.toUpperCase().replace(/\s+/g, "_"))
+              )
+            )
+          : [];
+          
+        const reinos: string[] = rawReino
+          ? Array.from(
+              new Set(
+                rawReino
+                  .split(",")
+                  .map(s => s.trim())
+                  .filter(Boolean)
+                  .map(s => s.toUpperCase())
+              )
+            )
+          : [];
+          
+        // Validar reinos
         const validReinos = ["NATURA", "NICROM", "PYRO", "AQUA"];
-        if (reinoParam && !validReinos.includes(reinoParam)) {
-          return c.json({ error: `Reino inválido. Los válidos son: ${validReinos.join(", ")}` }, 400);
+        for (const r of reinos) {
+          if (!validReinos.includes(r)) {
+            return c.json({ error: `Reino inválido: ${r}. Válidos: ${validReinos.join(", ")}` }, 400);
+          }
         }
       
-        // Mapear tipos de usuario a tablas y columnas
-        const tipoMap: Record<string, { table: string; columns: string[] }> = {
-          BESTIA_NORMAL: { table: "bestias", columns: ["atk", "def", "lvl", "reino", "tiene_habilidad_esp"] },
-          BESTIA_HABILIDAD: { table: "bestias", columns: ["atk", "def", "lvl", "reino", "tiene_habilidad_esp"] },
-          REINA: { table: "reinas", columns: ["atk", "lvl", "reino"] },
-          TOKEN: { table: "tokens", columns: ["atk", "def", "lvl", "reino"] },
-          CONJURO_NORMAL: { table: "conjuros", columns: ["tipo"] },
-          CONJURO_CAMPO: { table: "conjuros", columns: ["tipo"] },
-          RECURSO: { table: "recursos", columns: [] }
+        // Map de tipos
+        const tipoMap: Record<string, { table: "bestias"|"reinas"|"tokens"|"conjuros"|"recursos"; columns: string[] }> = {
+          BESTIA_NORMAL:   { table: "bestias",  columns: ["atk","def","lvl","reino","tiene_habilidad_esp"] },
+          BESTIA_HABILIDAD:{ table: "bestias",  columns: ["atk","def","lvl","reino","tiene_habilidad_esp"] },
+          REINA:           { table: "reinas",   columns: ["atk","lvl","reino"] },
+          TOKEN:           { table: "tokens",   columns: ["atk","def","lvl","reino"] },
+          CONJURO_NORMAL:  { table: "conjuros", columns: ["tipo"] },
+          CONJURO_CAMPO:   { table: "conjuros", columns: ["tipo"] },
+          RECURSO:         { table: "recursos", columns: [] }
         };
       
-        const tipos = tiposParam ? tiposParam.split(",") : [];
+        // Validar tipos
         for (const t of tipos) {
-          if (!tipoMap[t]) return c.json({ error: `Tipo inválido: ${t}` }, 400);
+          if (!tipoMap[t]) {
+            return c.json({ error: `Tipo inválido: ${t}` }, 400);
+          }
         }
       
-        // Obtener todas las cartas
-        const cartasRows = await env.DB.prepare(`SELECT id, id_fisico AS idFisico, nombre, descripcion, tipo_carta AS tipoCarta FROM cartas ORDER BY id ASC`).all();
-        const cartas = cartasRows.results as { id: number; idFisico?: string; nombre: string; descripcion: string; tipoCarta: string }[];
-        const ids = cartas.map(ca => ca.id);
+        // Si no viene ni tipo ni reino, no tiene sentido filtrar
+        if (tipos.length === 0 && reinos.length === 0) {
+          return c.json({ error: "Debes proporcionar al menos 'tipo' o 'reino'." }, 400);
+        }
+      
+        // 2) Obtener cartas base
+        const cartasRows = await env.DB.prepare(
+          `SELECT id, id_fisico AS idFisico, nombre, descripcion, tipo_carta AS tipoCarta
+          FROM cartas
+          ORDER BY id ASC`
+        ).all();
+      
+        const cartas = cartasRows.results as {
+          id: number; idFisico?: string; nombre: string; descripcion: string; tipoCarta: string
+        }[];
+        const ids = cartas.map(c => c.id);
       
         const CHUNK_SIZE = 15;
       
-        // Helper para cargar subtablas con filtro por reino
-        const fetchSubtable = async (table: string, columns: string[]): Promise<Record<number, any>> => {
+        // Helper para decidir qué reinos aplicar por tabla (tokens solo si incluye NATURA)
+        const reinosParaTabla = (table: string): string[] | undefined => {
+          if (reinos.length === 0) return undefined; // sin filtro por reino
+          if (table === "bestias" || table === "reinas") return reinos;
+          if (table === "tokens") {
+            return reinos.includes("NATURA") ? ["NATURA"] : []; // vacío => no consultar tokens
+          }
+          return undefined; // conjuros/recursos no tienen reino
+        };
+      
+        // Helper para cargar subtabla con filtros en chunks
+        const fetchSubtable = async (
+          table: "bestias"|"reinas"|"tokens"|"conjuros"|"recursos",
+          columns: string[],
+          reinosFiltro?: string[]
+        ): Promise<Record<number, any>> => {
           const combined: Record<number, any> = {};
+          // Si la lógica de reinos dice que esta tabla no aplica (tokens sin NATURA), saltar
+          if (reinosFiltro && reinosFiltro.length === 0) return combined;
+        
           for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
             const chunk = ids.slice(i, i + CHUNK_SIZE);
-            const placeholders = chunk.map(() => "?").join(",");
-            const cols = columns.length > 0 ? `, ${columns.join(",")}` : "";
-            let query = `SELECT id${cols} FROM ${table} WHERE id IN (${placeholders})`;
-            const bind: (string | number)[] = [...chunk];
+            const idPlaceholders = chunk.map(() => "?").join(",");
+            const cols = columns.length ? `, ${columns.join(",")}` : "";
           
-            // Aplicar filtro de reino solo si la tabla tiene columna "reino"
-            if (reinoParam && ["bestias", "reinas", "tokens"].includes(table)) {
-              query += " AND reino = ?";
-              bind.push(reinoParam);
+            let query = `SELECT id${cols} FROM ${table} WHERE id IN (${idPlaceholders})`;
+            const bind: (number|string)[] = [...chunk];
+          
+            if (reinosFiltro && ["bestias","reinas","tokens"].includes(table)) {
+              const reinoPlaceholders = reinosFiltro.map(() => "?").join(",");
+              query += ` AND reino IN (${reinoPlaceholders})`;
+              bind.push(...reinosFiltro);
             }
           
             const rows = await env.DB.prepare(query).bind(...bind).all();
-            for (const row of rows.results as any[]) combined[row.id] = row;
+            for (const row of rows.results as any[]) {
+              combined[row.id] = row;
+            }
           }
           return combined;
         };
       
-        // Obtener subtablas solo de los tipos seleccionados
-        const tablasUsadas = Array.from(new Set(tipos.map(t => tipoMap[t].table)));
-        const bestiasMap = tablasUsadas.includes("bestias") ? await fetchSubtable("bestias", ["atk","def","lvl","reino","tiene_habilidad_esp"]) : {};
-        const reinasMap = tablasUsadas.includes("reinas") ? await fetchSubtable("reinas", ["atk","lvl","reino"]) : {};
-        const tokensMap = tablasUsadas.includes("tokens") ? await fetchSubtable("tokens", ["atk","def","lvl","reino"]) : {};
-        const conjurosMap = tablasUsadas.includes("conjuros") ? await fetchSubtable("conjuros", ["tipo"]) : {};
-        const recursosMap = tablasUsadas.includes("recursos") ? await fetchSubtable("recursos", []) : {};
+        // 3) Determinar tablas a consultar: unión de
+        //    - las requeridas por 'tipos'
+        //    - las que aplican por 'reinos' (bestias/reinas y tokens solo si NATURA)
+        const tablasPorTipos = new Set(tipos.map(t => tipoMap[t].table));
+        if (reinos.length > 0) {
+          tablasPorTipos.add("bestias");
+          tablasPorTipos.add("reinas");
+          if (reinos.includes("NATURA")) tablasPorTipos.add("tokens");
+        }
       
-        // Combinar resultados con filtros dinámicos
-        const result = cartas
-          .filter(ca => {
-            let include = false;
-            for (const t of tipos) {
-              const { table } = tipoMap[t];
-              if (
-                (table === "bestias" && bestiasMap[ca.id]) ||
-                (table === "reinas" && reinasMap[ca.id]) ||
-                (table === "tokens" && tokensMap[ca.id]) ||
-                (table === "conjuros" && conjurosMap[ca.id]) ||
-                (table === "recursos" && recursosMap[ca.id])
-              ) {
-                include = true;
-              }
-            }
-            return include;
-          })
-          .map(ca => {
-            const obj: any = {
-              idFisico: ca.idFisico,
-              nombre: ca.nombre,
-              descripcion: ca.descripcion,
-              tipoCarta: ca.tipoCarta
-            };
-            if (bestiasMap[ca.id]) {
-              const b = bestiasMap[ca.id];
-              obj.atk = b.atk; obj.def = b.def; obj.lvl = b.lvl; obj.reino = b.reino; obj.tieneHabilidadEsp = b.tiene_habilidad_esp;
-            } else if (reinasMap[ca.id]) {
-              const r = reinasMap[ca.id];
-              obj.atk = r.atk; obj.lvl = r.lvl; obj.reino = r.reino;
-            } else if (tokensMap[ca.id]) {
-              const t = tokensMap[ca.id];
-              obj.atk = t.atk; obj.def = t.def; obj.lvl = t.lvl; obj.reino = t.reino;
-            } else if (conjurosMap[ca.id]) {
-              const cj = conjurosMap[ca.id];
-              obj.tipo = cj.tipo;
-            }
-            return obj;
+        // Cargar mapas de subtablas necesarios
+        const needBestias  = tablasPorTipos.has("bestias");
+        const needReinas   = tablasPorTipos.has("reinas");
+        const needTokens   = tablasPorTipos.has("tokens");
+        const needConjuros = tablasPorTipos.has("conjuros");
+        const needRecursos = tablasPorTipos.has("recursos");
+      
+        const bestiasMap  = needBestias  ? await fetchSubtable("bestias",  ["atk","def","lvl","reino","tiene_habilidad_esp"], reinosParaTabla("bestias")) : {};
+        const reinasMap   = needReinas   ? await fetchSubtable("reinas",   ["atk","lvl","reino"],                         reinosParaTabla("reinas"))  : {};
+        const tokensMap   = needTokens   ? await fetchSubtable("tokens",   ["atk","def","lvl","reino"],                   reinosParaTabla("tokens"))  : {};
+        const conjurosMap = needConjuros ? await fetchSubtable("conjuros", ["tipo"]) : {};
+        const recursosMap = needRecursos ? await fetchSubtable("recursos", [])      : {};
+      
+        // 4) Filtrar según reglas combinadas
+        const matchByTipos = (id: number): boolean => {
+          if (tipos.length === 0) return false;
+          return tipos.some(t => {
+            const table = tipoMap[t].table;
+            return (
+              (table === "bestias"  && bestiasMap[id])  ||
+              (table === "reinas"   && reinasMap[id])   ||
+              (table === "tokens"   && tokensMap[id])   ||
+              (table === "conjuros" && conjurosMap[id]) ||
+              (table === "recursos" && recursosMap[id])
+            );
           });
-        
+        };
+      
+        const matchByReinos = (id: number): boolean => {
+          if (reinos.length === 0) return false;
+          return !!(bestiasMap[id] || reinasMap[id] || tokensMap[id]);
+        };
+      
+        const filtered = cartas.filter(ca => {
+          // Si hay ambos, incluir si cumple cualquiera (union)
+          if (tipos.length > 0 && reinos.length > 0) {
+            return matchByTipos(ca.id) || matchByReinos(ca.id);
+          }
+          // Solo tipos
+          if (tipos.length > 0) return matchByTipos(ca.id);
+          // Solo reinos
+          if (reinos.length > 0) return matchByReinos(ca.id);
+          return false;
+        });
+      
+        // 5) Armar respuesta
+        const result = filtered.map(ca => {
+          const obj: any = {
+            idFisico: ca.idFisico,
+            nombre: ca.nombre,
+            descripcion: ca.descripcion,
+            tipoCarta: ca.tipoCarta,
+          };
+          if (bestiasMap[ca.id]) {
+            const b = bestiasMap[ca.id];
+            obj.atk = b.atk; obj.def = b.def; obj.lvl = b.lvl; obj.reino = b.reino;
+            obj.tieneHabilidadEsp = b.tiene_habilidad_esp;
+          } else if (reinasMap[ca.id]) {
+            const r = reinasMap[ca.id];
+            obj.atk = r.atk; obj.lvl = r.lvl; obj.reino = r.reino;
+          } else if (tokensMap[ca.id]) {
+            const t = tokensMap[ca.id];
+            obj.atk = t.atk; obj.def = t.def; obj.lvl = t.lvl; obj.reino = t.reino;
+          } else if (conjurosMap[ca.id]) {
+            obj.tipo = conjurosMap[ca.id].tipo;
+          }
+          // recursos no agregan campos adicionales
+          return obj;
+        });
+      
         return c.json(result);
-        
+      
       } catch (err: any) {
         console.error(err);
         return c.json({ error: err.message }, 500);
