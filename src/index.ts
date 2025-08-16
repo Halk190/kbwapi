@@ -448,16 +448,17 @@ export default {
         const recursosMap = needRecursos ? await fetchSubtable("recursos", [])      : {};
       
         // 4) Filtrar según reglas combinadas
-        const matchByTipos = (id: number): boolean => {
+        const matchByTipos = (carta: typeof cartas[number]): boolean => {
           if (tipos.length === 0) return false;
           return tipos.some(t => {
-            const table = tipoMap[t].table;
+            const { table } = tipoMap[t];
+            if (carta.tipoCarta !== t) return false; // <-- validamos tipo exacto
             return (
-              (table === "bestias"  && bestiasMap[id])  ||
-              (table === "reinas"   && reinasMap[id])   ||
-              (table === "tokens"   && tokensMap[id])   ||
-              (table === "conjuros" && conjurosMap[id]) ||
-              (table === "recursos" && recursosMap[id])
+              (table === "bestias"  && bestiasMap[carta.id])  ||
+              (table === "reinas"   && reinasMap[carta.id])   ||
+              (table === "tokens"   && tokensMap[carta.id])   ||
+              (table === "conjuros" && conjurosMap[carta.id]) ||
+              (table === "recursos" && recursosMap[carta.id])
             );
           });
         };
@@ -468,13 +469,10 @@ export default {
         };
       
         const filtered = cartas.filter(ca => {
-          // Si hay ambos, incluir si cumple cualquiera (union)
           if (tipos.length > 0 && reinos.length > 0) {
-            return matchByTipos(ca.id) || matchByReinos(ca.id);
+            return matchByTipos(ca) || matchByReinos(ca.id);
           }
-          // Solo tipos
-          if (tipos.length > 0) return matchByTipos(ca.id);
-          // Solo reinos
+          if (tipos.length > 0) return matchByTipos(ca);
           if (reinos.length > 0) return matchByReinos(ca.id);
           return false;
         });
