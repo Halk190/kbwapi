@@ -305,7 +305,16 @@ export default {
       }
     });
 
-    // Endpoint para filtrar cartas
+    // ============================
+    // Subtablas global
+    // ============================
+    const subtables = [
+      { name: "bestias", cols: ["atk","def","lvl","reino","tiene_habilidad_esp"] },
+      { name: "reinas", cols: ["atk","lvl","reino"] },
+      { name: "tokens", cols: ["atk","def","lvl","reino"] },
+    ];
+
+    // Endpoint para Buscar cartas con filtros
     app.get("/search-cards", userMiddleware, async (c) => {
       try {
         // ============================
@@ -316,10 +325,6 @@ export default {
         const rawTipo = c.req.query("tipo");
         const rawReino = c.req.query("reino");
         const rawNivel = c.req.query("nivel");
-      
-        if (!rawIdFisico && !rawNombre && !rawTipo && !rawReino && !rawNivel) {
-          return c.json({ error: "Debes especificar al menos un filtro" }, 400);
-        }
       
         // ============================
         // 2) Normalizar filtros
@@ -373,23 +378,18 @@ export default {
         };
       
         // ============================
-        // 4) Obtener cartas base
+        // 4) Obtener cartas base según prioridad
         // ============================
         let cartas: any[] = [];
         let ids: number[] = [];
       
-        // 4a) Si hay idFisico priorizamos
         if (rawIdFisico) {
+          // Prioridad 1: idFisico exacto
           const rows = await env.DB.prepare("SELECT * FROM cartas WHERE id_fisico = ?").bind(rawIdFisico).all();
           cartas = rows.results as any[];
           ids = cartas.map(c => c.id);
         } else if (nivel) {
-          // 4b) Si hay nivel, filtramos primero por subtablas
-          const subtables = [
-            { name: "bestias", cols: ["atk","def","lvl","reino","tiene_habilidad_esp"] },
-            { name: "reinas", cols: ["atk","lvl","reino"] },
-            { name: "tokens", cols: ["atk","def","lvl","reino"] },
-          ];
+          // Prioridad 2: nivel -> filtramos por subtablas primero
           const collected: Record<number, any> = {};
           for (const sub of subtables) {
             let query = `SELECT id, ${sub.cols.join(",")} FROM ${sub.name} WHERE lvl = ?`;
@@ -406,28 +406,28 @@ export default {
           const rows = await env.DB.prepare(`SELECT * FROM cartas WHERE id IN (${ids.map(() => "?").join(",")})`).bind(...ids).all();
           cartas = rows.results as any[];
         } else {
-          // 4c) Caso general: traer todas las cartas
+          // Caso general: traer todas las cartas
           const rows = await env.DB.prepare("SELECT * FROM cartas").all();
           cartas = rows.results as any[];
           ids = cartas.map(c => c.id);
         }
       
         // ============================
-        // 5) Traer subtablas según tipos en los resultados
+        // 5) Traer subtablas según resultados (solo bestias, reinas, tokens)
         // ============================
         const tiposSet = new Set(cartas.map(c => c.tipo_carta));
         const bestiasMap = tiposSet.has("BESTIA_NORMAL") || tiposSet.has("BESTIA_HABILIDAD")
-          ? await fetchSubtable("bestias", ["atk","def","lvl","reino","tiene_habilidad_esp"], ids)
+          ? await fetchSubtable("bestias", subtables.find(s => s.name === "bestias")!.cols, ids)
           : {};
         const reinasMap = tiposSet.has("REINA")
-          ? await fetchSubtable("reinas", ["atk","lvl","reino"], ids)
+          ? await fetchSubtable("reinas", subtables.find(s => s.name === "reinas")!.cols, ids)
           : {};
         const tokensMap = tiposSet.has("TOKEN")
-          ? await fetchSubtable("tokens", ["atk","def","lvl","reino"], ids)
+          ? await fetchSubtable("tokens", subtables.find(s => s.name === "tokens")!.cols, ids)
           : {};
       
         // ============================
-        // 6) Filtrar por tipo, reino y nombre si aplica
+        // 6) Filtrar por tipo, reino y nombre (parcial)
         // ============================
         const filtered = cartas.filter(ca => {
           if (tipos.length > 0 && !tipos.includes(ca.tipo_carta)) return false;
