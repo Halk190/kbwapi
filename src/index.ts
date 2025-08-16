@@ -239,20 +239,17 @@ export default {
     ];
 
     // Endpoint para Buscar cartas con filtros
+// Endpoint para Buscar cartas con filtros
     app.get("/search-cards", userMiddleware, async (c) => {
       try {
-        // ============================
         // 1) Leer parámetros
-        // ============================
         const rawIdFisico = c.req.query("idFisico");
         const rawNombre = c.req.query("nombre");
         const rawTipo = c.req.query("tipo");
         const rawReino = c.req.query("reino");
         const rawNivel = c.req.query("nivel");
       
-        // ============================
         // 2) Normalizar filtros
-        // ============================
         const tipos: string[] = rawTipo
           ? Array.from(new Set(rawTipo.split(",").map(s => s.trim()).filter(Boolean).map(s => s.toUpperCase().replace(/\s+/g,"_"))))
           : [];
@@ -263,9 +260,7 @@ export default {
       
         const validReinos = ["NATURA","NICROM","PYRO","AQUA"];
         for (const r of reinos) {
-          if (!validReinos.includes(r)) {
-            return c.json({ error: `Reino inválido: ${r}. Válidos: ${validReinos.join(", ")}` }, 400);
-          }
+          if (!validReinos.includes(r)) return c.json({ error: `Reino inválido: ${r}. Válidos: ${validReinos.join(", ")}` }, 400);
         }
       
         // Mapear tipos a subtablas
@@ -282,6 +277,7 @@ export default {
           if (!tipoMap[t]) return c.json({ error: `Tipo inválido: ${t}` }, 400);
         }
       
+        // Función DRY para traer subtablas
         const fetchSubtable = async (table: "bestias"|"reinas"|"tokens", columns: string[], ids: number[]): Promise<Record<number, any>> => {
           const combined: Record<number, any> = {};
           if (!ids.length) return combined;
@@ -296,30 +292,23 @@ export default {
           return combined;
         };
       
-        // ============================
         // 3) Obtener cartas base
-        // ============================
         let cartas: any[] = [];
         if (rawIdFisico) {
           const rows = await env.DB.prepare("SELECT * FROM cartas WHERE id_fisico = ?").bind(rawIdFisico).all();
           cartas = rows.results as any[];
         } else if (rawNombre) {
-          // Buscar por nombre parcial (case insensitive)
           const rows = await env.DB.prepare("SELECT * FROM cartas WHERE LOWER(nombre) LIKE ?").bind(`%${rawNombre.toLowerCase()}%`).all();
           cartas = rows.results as any[];
         } else {
-          // Caso general: todas las cartas
           const rows = await env.DB.prepare("SELECT * FROM cartas").all();
           cartas = rows.results as any[];
         }
-      
         if (!cartas.length) return c.json([]);
       
         const ids = cartas.map(c => c.id);
       
-        // ============================
         // 4) Traer subtablas según resultados
-        // ============================
         const tiposSet = new Set(cartas.map(c => c.tipo_carta));
         const bestiasMap = tiposSet.has("BESTIA_NORMAL") || tiposSet.has("BESTIA_HABILIDAD")
           ? await fetchSubtable("bestias", subtables.find(s => s.name === "bestias")!.cols, ids)
@@ -331,21 +320,19 @@ export default {
           ? await fetchSubtable("tokens", subtables.find(s => s.name === "tokens")!.cols, ids)
           : {};
       
-        // ============================
         // 5) Filtrar combinando todos los filtros
-        // ============================
         const filtered = cartas.filter(ca => {
-          // Filtrar por tipo
-          if (tipos.length > 0 && !tipos.includes(ca.tipo_carta)) return false;
-        
-          // Subtabla
+          const tipoTabla = tipoMap[ca.tipo_carta].table;
           const extra = bestiasMap[ca.id] || reinasMap[ca.id] || tokensMap[ca.id];
         
-          // Nivel
-          if (nivel !== undefined && extra && extra.lvl !== nivel) return false;
+          // Tipo
+          if (tipos.length && !tipos.includes(ca.tipo_carta)) return false;
         
-          // Reino
-          if (reinos.length > 0 && extra && !reinos.includes(extra.reino)) return false;
+          // Nivel y Reino solo aplican si la carta tiene subtabla
+          if (extra) {
+            if (nivel !== undefined && extra.lvl !== nivel) return false;
+            if (reinos.length && !reinos.includes(extra.reino)) return false;
+          }
         
           // Nombre parcial
           if (rawNombre && !ca.nombre.toLowerCase().includes(rawNombre.toLowerCase())) return false;
@@ -355,9 +342,7 @@ export default {
       
         if (!filtered.length) return c.json([]);
       
-        // ============================
-        // 6) Merge final con subtablas
-        // ============================
+        // 6) Merge final
         const result = filtered.map(ca => {
           const obj: any = {
             idFisico: ca.id_fisico,
@@ -371,7 +356,7 @@ export default {
             obj.def = extra.def;
             obj.lvl = extra.lvl;
             obj.reino = extra.reino;
-            if (extra.hasOwnProperty("tiene_habilidad_esp")) obj.tieneHabilidadEsp = extra.tiene_habilidad_esp === 1;
+            if ("tiene_habilidad_esp" in extra) obj.tieneHabilidadEsp = extra.tiene_habilidad_esp === 1;
           }
           return obj;
         });
