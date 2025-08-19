@@ -308,10 +308,18 @@ export default {
         let cartas: any[] = [];
         if (tipos.length) {
           const placeholders = tipos.map(() => "?").join(",");
-          const rows = await env.DB.prepare(`SELECT * FROM cartas WHERE tipo_carta IN (${placeholders})`).bind(...tipos).all();
+          const rows = await env.DB.prepare(
+            `SELECT * FROM cartas WHERE tipo_carta IN (${placeholders})`
+          ).bind(...tipos).all();
           cartas = rows.results as any[];
         } else if (rawNombre) {
-          const rows = await env.DB.prepare("SELECT * FROM cartas WHERE LOWER(nombre) LIKE ?").bind(`%${rawNombre.toLowerCase()}%`).all();
+          const rows = await env.DB.prepare(
+            "SELECT * FROM cartas WHERE LOWER(nombre) LIKE ?"
+          ).bind(`%${rawNombre.toLowerCase()}%`).all();
+          cartas = rows.results as any[];
+        } else if (!reinos.length && nivel === undefined) {
+          // 🚨 Caso sin filtros -> traer todas las cartas
+          const rows = await env.DB.prepare("SELECT * FROM cartas").all();
           cartas = rows.results as any[];
         }
       
