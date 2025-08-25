@@ -16,6 +16,8 @@ export default {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const app = new Hono<{ Bindings: Env }>();
 
+    app.use('*', async (c, next) => cors()(c, next));
+
     // Obtener secreto para auth
     const adminSecret = await env.ADMIN_TOKEN.get();
     //const userSecret = await env.USER_TOKEN.get();
