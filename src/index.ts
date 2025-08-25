@@ -1,14 +1,12 @@
 import { Hono, Context, Next } from "hono";
+import { sign, verify } from "hono/jwt"
 import { cors } from "hono/cors";
 import { handleRest } from './rest';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import cartasData from './resources/dataset/cartas.json';
 
-// Importa directamente el JSON (removido por incompatibilidad con import assertions)
-// import cartasData from './resources/dataset/cartas.json' assert { type: 'json' };
-
 export interface Env {
+    PLAYFAB_TITLE_ID: string;
+    JWT_SECRET: string;
     DB: D1Database;
     ADMIN_TOKEN: SecretsStoreSecret;
     USER_TOKEN: SecretsStoreSecret;
@@ -18,12 +16,9 @@ export default {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const app = new Hono<{ Bindings: Env }>();
 
-    // CORS para todas las rutas
-    app.use('*', async (c, next) => cors()(c, next));
-
     // Obtener secreto para auth
     const adminSecret = await env.ADMIN_TOKEN.get();
-    const userSecret = await env.USER_TOKEN.get();
+    //const userSecret = await env.USER_TOKEN.get();
 
     // Admin (token fijo)
     const adminMiddleware = async (c: Context, next: Next) => {
@@ -36,6 +31,7 @@ export default {
       return next();
     };
 
+    /*
     // Middleware para autenticar vía Bearer token
     const userMiddleware = async (c: Context, next: Next) => {
       const authHeader = c.req.header('Authorization');
@@ -49,21 +45,66 @@ export default {
 
       return next();
     };
+    */
 
-    // Endpoints REST CRUD
-    app.all('/rest/*', userMiddleware, handleRest);
-
-    // Endpoint para ejecutar consultas SQL arbitrarias
-    app.post('/query', userMiddleware, async (c) => {
+    // 🔐 Middleware para validar JWT en endpoints protegidos
+    const userMiddleware = async (c: Context, next: Next) => {
+      const authHeader = c.req.header('Authorization');
+      if (!authHeader) return c.json({ error: 'Unauthorized' }, 401);
+    
+      const token = authHeader.startsWith('Bearer ')
+        ? authHeader.substring(7)
+        : authHeader;
+    
       try {
-        const { query, params } = await c.req.json();
-        if (!query) return c.json({ error: 'Query is required' }, 400);
-
-        const results = await env.DB.prepare(query).bind(...(params || [])).all();
-        return c.json(results);
-      } catch (error: any) {
-        return c.json({ error: error.message }, 500);
+        // verify retorna el payload decodificado
+        const payload = await verify(token, c.env.USER_TOKEN); // usar USER_TOKEN como secreto
+        c.set('jwtPayload', payload); // guardamos el payload en context
+        return next();
+      } catch (err) {
+        return c.json({ error: 'Unauthorized', message: (err as Error).message }, 401);
       }
+    };
+
+    // Endpoint para que un usuario obtenga JWT desde su sessionTicket de PlayFab
+    app.post("/get-user-token", async (c) => {
+      const body = await c.req.json();
+      const { sessionTicket } = body;
+    
+      if (!sessionTicket) {
+        return c.json({ error: "Missing sessionTicket" }, 400);
+      }
+    
+      // 1️⃣ Validar ticket con PlayFab
+      const resp = await fetch(
+        `https://${c.env.PLAYFAB_TITLE_ID}.playfabapi.com/Client/AuthenticateSessionTicket`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ SessionTicket: sessionTicket }),
+        }
+      );
+    
+      if (!resp.ok) {
+        return c.json({ error: "Invalid session ticket" }, 401);
+      }
+    
+      const data: any = await resp.json();
+      if (!data.data?.UserInfo?.TitlePlayerAccount?.Id) {
+        return c.json({ error: "User not found" }, 401);
+      }
+      const playerId = data.data.UserInfo.TitlePlayerAccount.Id;
+    
+      // 2️⃣ Generar JWT firmado con USER_TOKEN
+      const payload = {
+        sub: playerId,
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 3600, // expira en 1h
+      };
+    
+      const token = await sign(payload, c.env.USER_TOKEN.toString());
+    
+      return c.json({ token }, 200);
     });
     
     const CHUNK_SIZE = 15; // tamaño de lotes para evitar saturar SQLite
@@ -400,6 +441,7 @@ export default {
       }
     });
 
+    
         return app.fetch(request, env, ctx);
     }
 } satisfies ExportedHandler<Env>;

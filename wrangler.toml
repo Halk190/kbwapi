@@ -23,3 +23,6 @@ store_id = "bbfe8b921ab8493e989006835362bf8e"      #  opcional, puedes dejarlo f
 
 [observability]
 enabled = true
+
+[vars]
+PLAYFAB_TITLE_ID = "E50CF"
