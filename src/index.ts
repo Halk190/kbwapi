@@ -50,6 +50,7 @@ export default {
     };
     */
 
+
     // 🔐 Middleware para validar JWT en endpoints protegidos
     const userMiddleware = async (c: Context, next: Next) => {
       const authHeader = c.req.header('Authorization');
@@ -60,9 +61,9 @@ export default {
         : authHeader;
     
       try {
-        // verify retorna el payload decodificado
-        const payload = await verify(token, c.env.USER_TOKEN); // usar USER_TOKEN como secreto
-        c.set('jwtPayload', payload); // guardamos el payload en context
+        const userSecret = await c.env.USER_TOKEN.get(); // 👈 aquí
+        const payload = await verify(token, userSecret);
+        c.set('jwtPayload', payload);
         return next();
       } catch (err) {
         return c.json({ error: 'Unauthorized', message: (err as Error).message }, 401);
