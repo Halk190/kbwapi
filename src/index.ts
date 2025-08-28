@@ -6,6 +6,7 @@ import cartasData from './resources/dataset/cartas.json';
 
 export interface Env {
     PLAYFAB_TITLE_ID: string;
+    PLAYFAB_SECRET_KEY: string;
     JWT_SECRET: string;
     DB: D1Database;
     ADMIN_TOKEN: SecretsStoreSecret;
@@ -82,7 +83,10 @@ export default {
         `https://${c.env.PLAYFAB_TITLE_ID}.playfabapi.com/Server/AuthenticateSessionTicket`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "X-SecretKey": c.env.PLAYFAB_SECRET_KEY,
+          },
           body: JSON.stringify({ SessionTicket: sessionTicket }),
         }
       );
