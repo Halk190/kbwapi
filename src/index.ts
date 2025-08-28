@@ -96,10 +96,13 @@ export default {
       }
     
       const data: any = await resp.json();
-      if (!data.data?.UserInfo?.TitlePlayerAccount?.Id) {
+        
+      //ruta real del TitlePlayerAccount
+      const playerId = data.data?.UserInfo?.TitleInfo?.TitlePlayerAccount?.Id;
+        
+      if (!playerId) {
         return c.json({ error: "User not found" }, 401);
       }
-      const playerId = data.data.UserInfo.TitlePlayerAccount.Id;
     
       // 2️⃣ Generar JWT firmado con USER_TOKEN
       const payload = {
