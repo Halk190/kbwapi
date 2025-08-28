@@ -79,7 +79,7 @@ export default {
     
       // 1️⃣ Validar ticket con PlayFab
       const resp = await fetch(
-        `https://${c.env.PLAYFAB_TITLE_ID}.playfabapi.com/Client/AuthenticateSessionTicket`,
+        `https://${env.PLAYFAB_TITLE_ID}.playfabapi.com/Client/AuthenticateSessionTicket`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
