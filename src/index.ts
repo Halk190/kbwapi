@@ -112,7 +112,9 @@ export default {
         exp: Math.floor(Date.now() / 1000) + 3600, // expira en 1h
       };
     
-      const token = await sign(payload, c.env.USER_TOKEN.toString());
+      // 2️⃣ Generar JWT firmado con USER_TOKEN
+      const userSecret = await c.env.USER_TOKEN.get();
+      const token = await sign(payload, userSecret);
     
       return c.json({ token }, 200);
     });
