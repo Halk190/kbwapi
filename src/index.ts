@@ -11,6 +11,7 @@ export interface Env {
     DB: D1Database;
     ADMIN_TOKEN: SecretsStoreSecret;
     USER_TOKEN: SecretsStoreSecret;
+    R2_BUCKET: R2Bucket;
 }
 
 export default {
@@ -430,6 +431,7 @@ export default {
         const result = todas.map(ca => {
           const obj: any = {
             idFisico: ca.id_fisico,
+            idGlobal: ca.id_global,
             nombre: ca.nombre,
             descripcion: ca.descripcion,
             tipoCarta: ca.tipo_carta,
@@ -453,7 +455,50 @@ export default {
       }
     });
 
+    // Endpoint para devolver imágenes de cartas desde R2
+    app.get("/card-image/:idGlobal", userMiddleware, async (c) => {
+      try {
+        const idGlobal = c.req.param("idGlobal");
+        if (!idGlobal) {
+          return c.json({ error: "Falta parámetro idGlobal" }, 400);
+        }
+      
+        // 🔒 Normalizar (evitar accesos raros tipo ../)
+        const safeName = idGlobal.replace(/[^a-zA-Z0-9_-]/g, "");
+      
+        // Buscar en R2 (puede ser .png o .jpg, según cómo subas las imágenes)
+        const possibleKeys = [`${safeName}.png`, `${safeName}.jpg`];
+        let object: R2ObjectBody | null = null;
+      
+        for (const key of possibleKeys) {
+          const candidate = await env.R2_BUCKET.get(key);
+          if (candidate) {
+            object = candidate;
+            break;
+          }
+        }
+      
+        if (!object) {
+          return c.json({ error: `Imagen no encontrada para ${idGlobal}` }, 404);
+        }
+      
+        // Deducir content-type según extensión
+        const contentType = object.key.endsWith(".jpg") || object.key.endsWith(".jpeg")
+          ? "image/jpeg"
+          : "image/png";
+      
+        return new Response(object.body, {
+          headers: {
+            "Content-Type": contentType,
+            "Cache-Control": "public, max-age=86400", // cache en clientes/CDN 1 día
+          },
+        });
+      } catch (err: any) {
+        console.error("Error en /card-image:", err);
+        return c.json({ error: err.message }, 500);
+      }
+    });
     
-        return app.fetch(request, env, ctx);
+      return app.fetch(request, env, ctx);
     }
 } satisfies ExportedHandler<Env>;

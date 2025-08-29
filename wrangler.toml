@@ -11,6 +11,11 @@ binding = "DB"
 database_name = "<Kingdom-Beast-World>"
 database_id = "cd100dce-750c-4f74-ad64-17cfb7c5d0d6"  #  reemplaza con tu ID real
 
+[[r2_buckets]]
+binding = "R2_BUCKET"       # Este es el nombre que usarás en el Worker
+bucket_name = "card-images" # El nombre real del bucket en R2
+preview_bucket_name = "card-images"
+
 [[secrets_store_secrets]]
 binding = "ADMIN_TOKEN"
 secret_name = "admin_token"
