@@ -415,16 +415,13 @@ export default {
         let subCartas: any[] = [];
         const subtables = [
           { name: "bestias", cols: ["atk", "def", "lvl", "reino", "tiene_habilidad_esp"] },
-          { name: "reinas", cols: ["atk", "def", "lvl", "reino"] },
-          { name: "tokens", cols: ["atk", "def", "lvl", "reino"] }
+          { name: "reinas", cols: ["atk", "lvl", "reino"] },
+          { name: "tokens", cols: ["atk", "def", "lvl", "reino"] },
         ];
 
         if (reinos.length || niveles.length || rawNombre) {
           for (const sub of subtables) {
-            let query = `SELECT c.*, s.* 
-                     FROM cartas c 
-                     JOIN ${sub.name} s ON c.id = s.id 
-                     WHERE 1=1`;
+            let query = `SELECT c.*, s.* FROM cartas c JOIN ${sub.name} s ON c.id = s.id WHERE 1=1`;
             const params: any[] = [];
 
             if (reinos.length) {
