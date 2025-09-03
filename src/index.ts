@@ -367,10 +367,13 @@ export default {
         if (tiposAND.length) {
           for (const t of tiposAND) {
             const table = tipoMap[t].table;
-            let query = `SELECT c.*, s.* FROM cartas c JOIN ${table} s ON c.id = s.id WHERE c.tipo_carta = ?`;
+            let query = `SELECT c.*, s.* 
+                FROM cartas c 
+                JOIN ${table} s ON c.id = s.id 
+                WHERE c.tipo_carta = ?`;
             const bindParams: any[] = [t];
 
-            // Solo agregamos filtros si el usuario los pasó
+            // AND dinámico: solo se agregan filtros si el usuario los pasó
             if (reinos.length) {
               query += ` AND s.reino IN (${reinos.map(() => "?").join(",")})`;
               bindParams.push(...reinos);
@@ -384,6 +387,7 @@ export default {
               bindParams.push(`%${rawNombre.toLowerCase()}%`);
             }
 
+            // Traer resultados únicamente de este tipo
             const rows = await env.DB.prepare(query).bind(...bindParams).all();
             cartas.push(...rows.results);
           }
@@ -408,13 +412,13 @@ export default {
           cartas.push(...rows.results);
         }
 
-        // 10) Buscar en subtablas si hay filtro de nivel/reino/nombre sin tipo específico
+        // 10) Subtablas solo si no se filtró por tipo
+        // (para casos donde usuario pasa nivel/reino pero no tipo, ej: ?nivel=5)
         let subCartas: any[] = [];
-        if (reinos.length || niveles.length || rawNombre) {
+        if (!tiposAND.length && (reinos.length || niveles.length || rawNombre)) {
           for (const sub of subtables) {
             let query = `SELECT c.*, s.* FROM cartas c JOIN ${sub.name} s ON c.id = s.id WHERE 1=1`;
             const params: any[] = [];
-
             if (reinos.length) {
               query += ` AND s.reino IN (${reinos.map(() => "?").join(",")})`;
               params.push(...reinos);
@@ -427,7 +431,6 @@ export default {
               query += " AND LOWER(c.nombre) LIKE ?";
               params.push(`%${rawNombre.toLowerCase()}%`);
             }
-
             const rows = await env.DB.prepare(query).bind(...params).all();
             subCartas.push(...rows.results);
           }
@@ -457,7 +460,7 @@ export default {
           ? await fetchSubtable("tokens", subtables.find(s => s.name === "tokens")!.cols, ids)
           : {};
 
-        // 13) Merge final para enviar resultado
+        // 13) Merge final (solo asignar def si la subtabla tiene esa columna)
         const result = todas.map(ca => {
           const obj: any = {
             idFisico: ca.id_fisico,
@@ -469,7 +472,7 @@ export default {
           const extra = bestiasMap[ca.id] || reinasMap[ca.id] || tokensMap[ca.id];
           if (extra) {
             obj.atk = extra.atk;
-            obj.def = extra.def;
+            if ("def" in extra) obj.def = extra.def; // Solo si la columna existe
             obj.lvl = extra.lvl;
             obj.reino = extra.reino;
             if ("tiene_habilidad_esp" in extra) obj.tieneHabilidadEsp = extra.tiene_habilidad_esp === 1;
