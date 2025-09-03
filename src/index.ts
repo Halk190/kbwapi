@@ -349,14 +349,14 @@ export default {
           for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
             const chunk = ids.slice(i, i + CHUNK_SIZE);
             const placeholders = chunk.map(() => "?").join(",");
-            const cols = columns.length ? `, ${columns.join(",")}` : "";
-            const rows = await env.DB.prepare(`SELECT id${cols} FROM ${table} WHERE id IN (${placeholders})`).bind(...chunk).all();
+            const colsStr = columns.length ? ", " + columns.join(", ") : "";
+            const rows = await env.DB.prepare(`SELECT id${colsStr} FROM ${table} WHERE id IN (${placeholders})`).bind(...chunk).all();
             for (const row of rows.results as any[]) combined[row.id] = row;
           }
           return combined;
         };
 
-        // 3) Si idFisico -> prioridad, ignorar lo demás
+        // 3) Si idFisico -> prioridad
         if (rawIdFisico) {
           const rows = await env.DB.prepare("SELECT * FROM cartas WHERE id_fisico = ?").bind(rawIdFisico).all();
           if (!rows.results.length) return c.json([]);
@@ -379,9 +379,9 @@ export default {
             const table = tipoMap[t].table;
             const placeholdersReino = reinos.map(() => "?").join(",");
             let query = `SELECT c.*, s.* 
-                        FROM cartas c 
-                        JOIN ${table} s ON c.id = s.id 
-                        WHERE c.tipo_carta = ? AND s.reino IN (${placeholdersReino})`;
+                     FROM cartas c 
+                     JOIN ${table} s ON c.id = s.id 
+                     WHERE c.tipo_carta = ? AND s.reino IN (${placeholdersReino})`;
             if (niveles.length) query += ` AND s.lvl IN (${niveles.map(() => "?").join(",")})`;
             if (rawNombre) query += " AND LOWER(c.nombre) LIKE ?";
 
@@ -394,7 +394,7 @@ export default {
           }
         }
 
-        // Tipos restantes (conjuros, recursos, o tipos sin AND)
+        // Tipos restantes (conjuros, recursos)
         const tiposRestantes = tipos.filter(t => !tiposConReino.includes(t));
         if (tiposRestantes.length) {
           let query = `SELECT * FROM cartas WHERE tipo_carta IN (${tiposRestantes.map(() => "?").join(",")})`;
@@ -422,9 +422,9 @@ export default {
         if (reinos.length || niveles.length || rawNombre) {
           for (const sub of subtables) {
             let query = `SELECT c.*, s.* 
-                        FROM cartas c 
-                        JOIN ${sub.name} s ON c.id = s.id 
-                        WHERE 1=1`;
+                     FROM cartas c 
+                     JOIN ${sub.name} s ON c.id = s.id 
+                     WHERE 1=1`;
             const params: any[] = [];
 
             if (reinos.length) {
