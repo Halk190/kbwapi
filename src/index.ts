@@ -355,7 +355,7 @@ export default {
         // 6) Preparar subtablas con sus columnas
         const subtables = [
           { name: "bestias", cols: ["atk", "def", "lvl", "reino", "tiene_habilidad_esp"] },
-          { name: "reinas", cols: ["atk", "def", "lvl", "reino"] },
+          { name: "reinas", cols: ["atk", "lvl", "reino"] },
           { name: "tokens", cols: ["atk", "def", "lvl", "reino"] },
         ];
 
