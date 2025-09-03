@@ -283,15 +283,6 @@ export default {
       }
     });
 
-    // ============================
-    // Subtablas global
-    // ============================
-    const subtables = [
-      { name: "bestias", cols: ["atk", "def", "lvl", "reino", "tiene_habilidad_esp"] },
-      { name: "reinas", cols: ["atk", "lvl", "reino"] },
-      { name: "tokens", cols: ["atk", "def", "lvl", "reino"] },
-    ];
-
     // Endpoint para Buscar cartas con filtros
     app.get("/search-cards", userMiddleware, async (c) => {
       try {
@@ -379,9 +370,9 @@ export default {
             const table = tipoMap[t].table;
             const placeholdersReino = reinos.map(() => "?").join(",");
             let query = `SELECT c.*, s.* 
-                     FROM cartas c 
-                     JOIN ${table} s ON c.id = s.id 
-                     WHERE c.tipo_carta = ? AND s.reino IN (${placeholdersReino})`;
+                    FROM cartas c 
+                    JOIN ${table} s ON c.id = s.id 
+                    WHERE c.tipo_carta = ? AND s.reino IN (${placeholdersReino})`;
             if (niveles.length) query += ` AND s.lvl IN (${niveles.map(() => "?").join(",")})`;
             if (rawNombre) query += " AND LOWER(c.nombre) LIKE ?";
 
