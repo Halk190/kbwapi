@@ -367,22 +367,15 @@ export default {
         // Caso especial: si hay al menos un tipoConReino y al menos un reino -> AND
         const tiposAND = tipos.filter(t => tiposConReino.includes(t));
         if (tiposAND.length && reinos.length) {
-          // Traer solo cartas que cumplan tipo AND reino
-          const placeholdersTipo = tiposAND.map(() => "?").join(",");
-          const placeholdersReino = reinos.map(() => "?").join(",");
-          
-          let queries: string[] = [];
           for (const t of tiposAND) {
-            // Determinar subtabla según tipo
             const table = tipoMap[t].table;
-            queries.push(`SELECT c.*, s.* 
+            const placeholdersReino = reinos.map(() => "?").join(",");
+            const query = `SELECT c.*, s.* 
                           FROM cartas c 
                           JOIN ${table} s ON c.id = s.id 
-                          WHERE c.tipo_carta = ? AND s.reino IN (${placeholdersReino})`);
-          }
-        
-          for (const q of queries) {
-            const rows = await env.DB.prepare(q).bind(...Array(queries.length).fill(t), ...reinos).all();
+                          WHERE c.tipo_carta = ? AND s.reino IN (${placeholdersReino})`;
+            // Bindear t primero, luego los reinos
+            const rows = await env.DB.prepare(query).bind(t, ...reinos).all();
             cartas.push(...rows.results);
           }
         }
