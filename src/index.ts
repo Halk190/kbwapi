@@ -358,23 +358,49 @@ export default {
           }]);
         }
       
-        // 4) Obtener cartas base por tipo/nombre
+        // 4) Obtener cartas base por tipo/nombre con caso especial AND para tipos con reino
         let cartas: any[] = [];
-        if (tipos.length) {
-          const placeholders = tipos.map(() => "?").join(",");
-          const rows = await env.DB.prepare(
-            `SELECT * FROM cartas WHERE tipo_carta IN (${placeholders})`
-          ).bind(...tipos).all();
-          cartas = rows.results as any[];
-        } else if (rawNombre) {
-          const rows = await env.DB.prepare(
-            "SELECT * FROM cartas WHERE LOWER(nombre) LIKE ?"
-          ).bind(`%${rawNombre.toLowerCase()}%`).all();
-          cartas = rows.results as any[];
-        } else if (!reinos.length && nivel === undefined) {
-          // 🚨 Caso sin filtros -> traer todas las cartas
-          const rows = await env.DB.prepare("SELECT * FROM cartas").all();
-          cartas = rows.results as any[];
+              
+        // Tipos que tienen reino
+        const tiposConReino = ["BESTIA_NORMAL", "BESTIA_HABILIDAD", "REINA", "TOKEN"];
+              
+        // Caso especial: si hay al menos un tipoConReino y al menos un reino -> AND
+        const tiposAND = tipos.filter(t => tiposConReino.includes(t));
+        if (tiposAND.length && reinos.length) {
+          // Traer solo cartas que cumplan tipo AND reino
+          const placeholdersTipo = tiposAND.map(() => "?").join(",");
+          const placeholdersReino = reinos.map(() => "?").join(",");
+          
+          let queries: string[] = [];
+          for (const t of tiposAND) {
+            // Determinar subtabla según tipo
+            const table = tipoMap[t].table;
+            queries.push(`SELECT c.*, s.* 
+                          FROM cartas c 
+                          JOIN ${table} s ON c.id = s.id 
+                          WHERE c.tipo_carta = ? AND s.reino IN (${placeholdersReino})`);
+          }
+        
+          for (const q of queries) {
+            const rows = await env.DB.prepare(q).bind(...Array(queries.length).fill(t), ...reinos).all();
+            cartas.push(...rows.results);
+          }
+        }
+        
+        // Para todos los demás tipos (conjuros, recursos) o si no se da el AND especial
+        const tiposRestantes = tipos.filter(t => !tiposConReino.includes(t));
+        if (tiposRestantes.length) {
+          const placeholders = tiposRestantes.map(() => "?").join(",");
+          const rows = await env.DB.prepare(`SELECT * FROM cartas WHERE tipo_carta IN (${placeholders})`)
+            .bind(...tiposRestantes).all();
+          cartas.push(...rows.results);
+        }
+        
+        // Filtrado por nombre si aplica (no importa si AND especial o no)
+        if (rawNombre) {
+          const rows = await env.DB.prepare("SELECT * FROM cartas WHERE LOWER(nombre) LIKE ?")
+            .bind(`%${rawNombre.toLowerCase()}%`).all();
+          cartas.push(...rows.results);
         }
       
         // 5) Buscar en subtablas si hay reino/nivel
