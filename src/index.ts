@@ -339,17 +339,41 @@ export default {
           return combined;
         };
 
-        // 5) Caso especial: si se pasa idFisico, prioridad absoluta
+        // 5) Caso especial: si se pasa idFisico → traer carta + merge con su subtabla
         if (rawIdFisico) {
           const rows = await env.DB.prepare("SELECT * FROM cartas WHERE id_fisico = ?").bind(rawIdFisico).all();
           if (!rows.results.length) return c.json([]);
           const carta = rows.results[0];
-          return c.json([{
+
+          let extra: any = null;
+          if (carta.tipo_carta === "BESTIA_NORMAL" || carta.tipo_carta === "BESTIA_HABILIDAD") {
+            const r = await env.DB.prepare("SELECT atk, def, lvl, reino, tiene_habilidad_esp FROM bestias WHERE id = ?").bind(carta.id).all();
+            extra = r.results[0] || null;
+          } else if (carta.tipo_carta === "REINA") {
+            const r = await env.DB.prepare("SELECT atk, lvl, reino FROM reinas WHERE id = ?").bind(carta.id).all();
+            extra = r.results[0] || null;
+          } else if (carta.tipo_carta === "TOKEN") {
+            const r = await env.DB.prepare("SELECT atk, def, lvl, reino FROM tokens WHERE id = ?").bind(carta.id).all();
+            extra = r.results[0] || null;
+          }
+
+          // 🔀 Merge final (igual que en paso 13)
+          const obj: any = {
             idFisico: carta.id_fisico,
+            idGlobal: carta.id_global,
             nombre: carta.nombre,
             descripcion: carta.descripcion,
-            tipoCarta: carta.tipo_carta
-          }]);
+            tipoCarta: carta.tipo_carta,
+          };
+          if (extra) {
+            obj.atk = extra.atk;
+            if ("def" in extra) obj.def = extra.def;
+            obj.lvl = extra.lvl;
+            obj.reino = extra.reino;
+            if ("tiene_habilidad_esp" in extra) obj.tieneHabilidadEsp = extra.tiene_habilidad_esp === 1;
+          }
+
+          return c.json([obj]);
         }
 
         // 6) Preparar subtablas con sus columnas
@@ -368,12 +392,11 @@ export default {
           for (const t of tiposAND) {
             const table = tipoMap[t].table;
             let query = `SELECT c.*, s.* 
-                FROM cartas c 
-                JOIN ${table} s ON c.id = s.id 
-                WHERE c.tipo_carta = ?`;
+            FROM cartas c 
+            JOIN ${table} s ON c.id = s.id 
+            WHERE c.tipo_carta = ?`;
             const bindParams: any[] = [t];
 
-            // AND dinámico: solo se agregan filtros si el usuario los pasó
             if (reinos.length) {
               query += ` AND s.reino IN (${reinos.map(() => "?").join(",")})`;
               bindParams.push(...reinos);
@@ -387,7 +410,6 @@ export default {
               bindParams.push(`%${rawNombre.toLowerCase()}%`);
             }
 
-            // Traer resultados únicamente de este tipo
             const rows = await env.DB.prepare(query).bind(...bindParams).all();
             cartas.push(...rows.results);
           }
@@ -412,8 +434,7 @@ export default {
           cartas.push(...rows.results);
         }
 
-        // 10) Subtablas solo si no se filtró por tipo
-        // (para casos donde usuario pasa nivel/reino pero no tipo, ej: ?nivel=5)
+        // 10) Subtablas si no se filtró por tipo
         let subCartas: any[] = [];
         if (!tiposAND.length && (reinos.length || niveles.length || rawNombre)) {
           for (const sub of subtables) {
@@ -460,7 +481,7 @@ export default {
           ? await fetchSubtable("tokens", subtables.find(s => s.name === "tokens")!.cols, ids)
           : {};
 
-        // 13) Merge final (solo asignar def si la subtabla tiene esa columna)
+        // 13) Merge final para resultados múltiples
         const result = todas.map(ca => {
           const obj: any = {
             idFisico: ca.id_fisico,
@@ -472,7 +493,7 @@ export default {
           const extra = bestiasMap[ca.id] || reinasMap[ca.id] || tokensMap[ca.id];
           if (extra) {
             obj.atk = extra.atk;
-            if ("def" in extra) obj.def = extra.def; // Solo si la columna existe
+            if ("def" in extra) obj.def = extra.def;
             obj.lvl = extra.lvl;
             obj.reino = extra.reino;
             if ("tiene_habilidad_esp" in extra) obj.tieneHabilidadEsp = extra.tiene_habilidad_esp === 1;
