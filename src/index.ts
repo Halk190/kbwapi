@@ -128,22 +128,31 @@ export default {
     let cachedGoogleCerts: Record<string, string> | null = null;
     let certsCacheExpireAt = 0;
 
-    async function getGoogleCertForKid(kid: string) {
+    async function getGoogleCertForKid(kid: string): Promise<string | null> {
       const now = Date.now();
+    
       if (!cachedGoogleCerts || now > certsCacheExpireAt) {
-        const resp = await fetch('https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com');
-        if (!resp.ok) throw new Error(`Failed fetching Google certs: ${resp.status}`);
-        const json = await resp.json(); // objeto { kid: "-----BEGIN CERTIFICATE-----\n..." }
+        const resp = await fetch(
+          "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com"
+        );
+      
+        if (!resp.ok) {
+          throw new Error(`Failed fetching Google certs: ${resp.status}`);
+        }
+      
+        // 👇 tipamos explícitamente para evitar "unknown"
+        const json = (await resp.json()) as Record<string, string>;
         cachedGoogleCerts = json;
       
         // intentar respetar cache-control si viene
-        const cacheControl = resp.headers.get('cache-control') || '';
+        const cacheControl = resp.headers.get("cache-control") || "";
         const m = cacheControl.match(/max-age=(\d+)/);
         const maxAge = m ? parseInt(m[1], 10) : 60 * 60; // fallback 1h
         certsCacheExpireAt = now + maxAge * 1000;
       }
     
-      return cachedGoogleCerts[kid] ?? null;
+      // 👇 TypeScript ya no se queja porque cachedGoogleCerts nunca será null aquí
+      return cachedGoogleCerts![kid] ?? null;
     }
 
     app.post('/get-user-token', async (c) => {
