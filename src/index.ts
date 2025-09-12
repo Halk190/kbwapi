@@ -6,7 +6,8 @@ import cartasData from './resources/dataset/cartas.json';
 
 export interface Env {
   PLAYFAB_TITLE_ID: string;
-  PLAYFAB_SECRET_KEY: string;
+  //PLAYFAB_SECRET_KEY: string;
+  FIREBASE_API_KEY: string;
   JWT_SECRET: string;
   DB: D1Database;
   ADMIN_TOKEN: SecretsStoreSecret;
@@ -72,6 +73,7 @@ export default {
     };
 
     // Endpoint para que un usuario obtenga JWT desde su sessionTicket de PlayFab
+    /*
     app.post("/get-user-token", async (c) => {
       const body = await c.req.json();
       const { sessionTicket } = body;
@@ -119,6 +121,60 @@ export default {
 
       return c.json({ token }, 200);
     });
+    */
+
+    app.post("/get-user-token", async (c) => {
+      const body = await c.req.json();
+      const { idToken } = body;
+    
+      if (!idToken) {
+        return c.json({ error: "Missing idToken" }, 400);
+      }
+    
+      try {
+        // 1️⃣ Validar idToken con Firebase REST API
+        const resp = await fetch(
+          `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${c.env.FIREBASE_API_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ idToken: idToken }),
+          }
+        );
+      
+        if (!resp.ok) {
+          // puede devolver 400 si token inválido
+          return c.json({ error: "Invalid Firebase ID token" }, 401);
+        }
+      
+        const data: any = await resp.json();
+      
+        const user = data.users?.[0];
+        if (!user || !user.localId) {
+          return c.json({ error: "User not found" }, 401);
+        }
+      
+        const userId = user.localId;
+      
+        // Aquí opcionalmente puedes verificar otros datos:
+        // user.email, user.emailVerified, user.providerId, etc.
+      
+        // 2️⃣ Generar JWT firmado con tu secreto
+        const payload = {
+          sub: userId,
+          iat: Math.floor(Date.now() / 1000),
+          exp: Math.floor(Date.now() / 1000) + 3600, // expira en 1 hora
+        };
+      
+        const userSecret = await c.env.USER_TOKEN.get();
+        const token = await sign(payload, userSecret);
+      
+        return c.json({ token }, 200);
+      } catch (err: any) {
+        console.error("❌ Error al validar Firebase token:", err);
+        return c.json({ error: "Internal server error" }, 500);
+      }
+    });
 
     const CHUNK_SIZE = 10; // tamaño de lotes para evitar saturar SQLite
 
@@ -149,11 +205,11 @@ export default {
     };
 
     type Token = {
-  id: number;
-  atk: number;
-  def: number;
-  lvl: number;
-  reino: string;
+      id: number;
+      atk: number;
+      def: number;
+      lvl: number;
+      reino: string;
     };
 
     type Conjuro = { id: number; tipo: string };
