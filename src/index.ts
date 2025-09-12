@@ -3,12 +3,12 @@ import { sign, verify } from "hono/jwt"
 import { cors } from "hono/cors";
 import { handleRest } from './rest';
 import cartasData from './resources/dataset/cartas.json';
-import { importJWK, jwtVerify } from "jose";
+import { createRemoteJWKSet,importJWK, jwtVerify } from "jose";
 
 export interface Env {
-  PLAYFAB_TITLE_ID: string;
+  //PLAYFAB_TITLE_ID: string;
   //PLAYFAB_SECRET_KEY: string;
-  FIREBASE_API_KEY: string;
+  FIREBASE_PROJECT_ID: string;
   JWT_SECRET: string;
   DB: D1Database;
   ADMIN_TOKEN: SecretsStoreSecret;
@@ -124,6 +124,10 @@ export default {
     });
     */
 
+    const JWKS = createRemoteJWKSet(
+      new URL("https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com")
+    );
+
     app.post("/get-user-token", async (c) => {
       const body = await c.req.json();
       const { idToken } = body;
@@ -133,22 +137,33 @@ export default {
       }
     
       try {
-        // 1️⃣ Descargar claves públicas de Google
-        const jwksResp = await fetch(
-          "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com"
-        );
-        const jwks = await jwksResp.json();
+        // 1️⃣ Verificar el token contra Firebase JWKS
+        const { payload } = await jwtVerify(idToken, JWKS, {
+          issuer: `https://securetoken.google.com/${c.env.FIREBASE_PROJECT_ID}`, // tu Firebase project ID
+          audience: c.env.FIREBASE_PROJECT_ID,
+        });
       
-        // 👉 Aquí deberíamos convertir el JWKS a formato usable por jose
-        // pero de momento solo validamos que podemos descargarlo:
-        console.log("🔑 Claves JWKS recibidas:", Object.keys(jwks).length);
+        // 2️⃣ Extraer el UID (sub) del payload
+        const userId = payload.sub;
+        if (!userId) {
+          return c.json({ error: "Invalid Firebase token: no sub" }, 401);
+        }
       
-        // 2️⃣ TODO: Validar idToken con jose (lo haremos en el siguiente paso)
-      
-        return c.json({ message: "Deploy OK, jose instalado y fetch JWKS funciona" });
+        // 3️⃣ Generar JWT propio
+        const now = Math.floor(Date.now() / 1000);
+        const userSecret = await c.env.USER_TOKEN.get();
+              
+        const newPayload = {
+          sub: userId,   // UID de Firebase
+          iat: now,      // issued at
+          exp: now + 3600, // expira en 1 hora
+        };
+        
+        const token = await sign(newPayload, userSecret);
+        return c.json({ token }, 200);
       } catch (err: any) {
-        console.error("❌ Error en prueba jose/Firebase:", err);
-        return c.json({ error: "Internal server error" }, 500);
+        console.error("❌ Error al validar Firebase token:", err);
+        return c.json({ error: "Invalid Firebase token" }, 401);
       }
     });
 
