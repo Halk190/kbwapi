@@ -3,7 +3,7 @@ import { sign, verify } from "hono/jwt"
 import { cors } from "hono/cors";
 import { handleRest } from './rest';
 import cartasData from './resources/dataset/cartas.json';
-import { createRemoteJWKSet,importJWK, jwtVerify } from "jose";
+import { jwtVerify, decodeProtectedHeader, importX509 } from 'jose';
 
 export interface Env {
   //PLAYFAB_TITLE_ID: string;
@@ -124,46 +124,71 @@ export default {
     });
     */
 
-    const JWKS = createRemoteJWKSet(
-      new URL("https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com")
-    );
+    // simple cache en memoria (válido en Workers mientras la instancia viva)
+    let cachedGoogleCerts: Record<string, string> | null = null;
+    let certsCacheExpireAt = 0;
 
-    app.post("/get-user-token", async (c) => {
-      const body = await c.req.json();
-      const { idToken } = body;
-    
-      if (!idToken) {
-        return c.json({ error: "Missing idToken" }, 400);
+    async function getGoogleCertForKid(kid: string) {
+      const now = Date.now();
+      if (!cachedGoogleCerts || now > certsCacheExpireAt) {
+        const resp = await fetch('https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com');
+        if (!resp.ok) throw new Error(`Failed fetching Google certs: ${resp.status}`);
+        const json = await resp.json(); // objeto { kid: "-----BEGIN CERTIFICATE-----\n..." }
+        cachedGoogleCerts = json;
+      
+        // intentar respetar cache-control si viene
+        const cacheControl = resp.headers.get('cache-control') || '';
+        const m = cacheControl.match(/max-age=(\d+)/);
+        const maxAge = m ? parseInt(m[1], 10) : 60 * 60; // fallback 1h
+        certsCacheExpireAt = now + maxAge * 1000;
       }
     
+      return cachedGoogleCerts[kid] ?? null;
+    }
+
+    app.post('/get-user-token', async (c) => {
       try {
-        // 1️⃣ Verificar el token contra Firebase JWKS
-        const { payload } = await jwtVerify(idToken, JWKS, {
-          issuer: `https://securetoken.google.com/${c.env.FIREBASE_PROJECT_ID}`, // tu Firebase project ID
-          audience: c.env.FIREBASE_PROJECT_ID,
+        const body = await c.req.json();
+        const { idToken } = body;
+        if (!idToken) return c.json({ error: 'Missing idToken' }, 400);
+      
+        // 1) decodificar header para obtener kid + alg
+        const header = decodeProtectedHeader(idToken);
+        const kid = header.kid;
+        const alg = header.alg ?? 'RS256';
+        if (!kid) return c.json({ error: 'Token header missing kid' }, 401);
+      
+        // 2) obtener certificado PEM correspondiente al kid
+        const pem = await getGoogleCertForKid(kid);
+        if (!pem) return c.json({ error: 'Public key not found for kid' }, 401);
+      
+        // 3) importar X509 PEM -> key usable por jose
+        const key = await importX509(pem, alg);
+      
+        // 4) verificar token
+        const projectId = c.env.FIREBASE_PROJECT_ID;
+        if (!projectId) return c.json({ error: 'Missing FIREBASE_PROJECT_ID env' }, 500);
+      
+        const { payload } = await jwtVerify(idToken, key, {
+          issuer: `https://securetoken.google.com/${projectId}`,
+          audience: projectId,
         });
       
-        // 2️⃣ Extraer el UID (sub) del payload
-        const userId = payload.sub;
-        if (!userId) {
-          return c.json({ error: "Invalid Firebase token: no sub" }, 401);
-        }
+        const userId = (payload as any).sub;
+        if (!userId) return c.json({ error: 'Invalid Firebase token: no sub' }, 401);
       
-        // 3️⃣ Generar JWT propio
+        // 5) generar tu propio JWT (igual que antes)
         const now = Math.floor(Date.now() / 1000);
         const userSecret = await c.env.USER_TOKEN.get();
-              
-        const newPayload = {
-          sub: userId,   // UID de Firebase
-          iat: now,      // issued at
-          exp: now + 3600, // expira en 1 hora
-        };
-        
-        const token = await sign(newPayload, userSecret);
+        const newPayload = { sub: userId, iat: now, exp: now + (60 * 60) };
+      
+        const token = await sign(newPayload, userSecret); // asumo que tienes sign()
         return c.json({ token }, 200);
+      
       } catch (err: any) {
-        console.error("❌ Error al validar Firebase token:", err);
-        return c.json({ error: "Invalid Firebase token" }, 401);
+        console.error('Error verifying Firebase ID token:', err);
+        // si la verificación falla, devolver 401 para indicar token inválido
+        return c.json({ error: 'Invalid Firebase token', message: err?.message }, 401);
       }
     });
 
