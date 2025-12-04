@@ -37,23 +37,6 @@ export default {
       return next();
     };
 
-    /*
-    // Middleware para autenticar vía Bearer token
-    const userMiddleware = async (c: Context, next: Next) => {
-      const authHeader = c.req.header('Authorization');
-      if (!authHeader) return c.json({ error: 'Unauthorized' }, 401);
-
-      const token = authHeader.startsWith('Bearer ')
-        ? authHeader.substring(7)
-        : authHeader;
-
-      if (token !== userSecret) return c.json({ error: 'Unauthorized' }, 401);
-
-      return next();
-    };
-    */
-
-
     // 🔐 Middleware para validar JWT en endpoints protegidos
     const userMiddleware = async (c: Context, next: Next) => {
       const authHeader = c.req.header('Authorization');
@@ -72,57 +55,6 @@ export default {
         return c.json({ error: 'Unauthorized', message: (err as Error).message }, 401);
       }
     };
-
-    // Endpoint para que un usuario obtenga JWT desde su sessionTicket de PlayFab
-    /*
-    app.post("/get-user-token", async (c) => {
-      const body = await c.req.json();
-      const { sessionTicket } = body;
-
-      if (!sessionTicket) {
-        return c.json({ error: "Missing sessionTicket" }, 400);
-      }
-
-      // 1️⃣ Validar ticket con PlayFab
-      const resp = await fetch(
-        `https://${c.env.PLAYFAB_TITLE_ID}.playfabapi.com/Server/AuthenticateSessionTicket`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-SecretKey": c.env.PLAYFAB_SECRET_KEY,
-          },
-          body: JSON.stringify({ SessionTicket: sessionTicket }),
-        }
-      );
-
-      if (!resp.ok) {
-        return c.json({ error: "Invalid session ticket" }, 401);
-      }
-
-      const data: any = await resp.json();
-
-      //ruta real del TitlePlayerAccount
-      const playerId = data.data?.UserInfo?.TitleInfo?.TitlePlayerAccount?.Id;
-
-      if (!playerId) {
-        return c.json({ error: "User not found" }, 401);
-      }
-
-      // 2️⃣ Generar JWT firmado con USER_TOKEN
-      const payload = {
-        sub: playerId,
-        iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + 3600, // expira en 1h
-      };
-
-      // 2️⃣ Generar JWT firmado con USER_TOKEN
-      const userSecret = await c.env.USER_TOKEN.get();
-      const token = await sign(payload, userSecret);
-
-      return c.json({ token }, 200);
-    });
-    */
 
     // simple cache en memoria (válido en Workers mientras la instancia viva)
     let cachedGoogleCerts: Record<string, string> | null = null;
@@ -240,6 +172,23 @@ export default {
     type Conjuro = { id: number; tipo: string };
     type Recurso = { id: number };
 
+    const APARICIONES = [
+      "SERR",
+      "MRSP",
+      "MBNT",
+      "MBN",
+      "MBA",
+      "MBP",
+      "SSC",
+    ];
+
+    function obtenerAparicion(idFisico: any): string {
+      for (const prefijo of APARICIONES) {
+        if (idFisico.includes(prefijo)) return prefijo;
+      }
+      return "??"; // fallback en caso de futuras expansiones desconocidas
+    }
+
     // Endpoint que importa JSON desde archivo para insertar o actualizar en DB
     app.post('/admin/importar-json', adminMiddleware, async (c: any) => {
       try {
@@ -264,6 +213,8 @@ export default {
         // ---------------------
         const upsertCartas = async (cartasChunk: Carta[]) => {
           for (const p of cartasChunk) {
+            const aparicion = obtenerAparicion(p.idFisico);
+          
             const obj = {
               id: p.id,
               id_global: p.idGlobal,
@@ -271,19 +222,29 @@ export default {
               nombre: p.nombre,
               descripcion: p.descripcion,
               tipo_carta: p.tipoCarta,
+              apariciones: aparicion,
             };
             checkUndefined(obj, 'cartas');
           
             await env.DB.prepare(`
-              INSERT INTO cartas (id, id_global, id_fisico, nombre, descripcion, tipo_carta)
-              VALUES (?, ?, ?, ?, ?, ?)
+              INSERT INTO cartas (id, id_global, id_fisico, nombre, descripcion, tipo_carta, apariciones)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(id_global) DO UPDATE SET
                 id_fisico = excluded.id_fisico,
                 nombre = excluded.nombre,
                 descripcion = excluded.descripcion,
-                tipo_carta = excluded.tipo_carta
+                tipo_carta = excluded.tipo_carta,
+                apariciones = excluded.apariciones
             `)
-              .bind(obj.id, obj.id_global, obj.id_fisico, obj.nombre, obj.descripcion, obj.tipo_carta)
+              .bind(
+                obj.id,
+                obj.id_global,
+                obj.id_fisico,
+                obj.nombre,
+                obj.descripcion,
+                obj.tipo_carta,
+                obj.apariciones
+              )
               .run();
           }
         };
@@ -679,6 +640,49 @@ export default {
         return c.json({ error: err.message }, 500);
       }
     });
+
+
+
+    //Endpoint para retornar id_fisico y id_global de todas las cartas
+    app.get("/all-cards-ids", adminMiddleware, async (c) => {
+      const db = c.env.DB;
+    
+      // 1. Consulta única: solo columnas necesarias
+      const result = await db.prepare(
+        "SELECT id_fisico, id_global FROM cartas ORDER BY id_global ASC"
+      ).all();
+    
+      const encoder = new TextEncoder();
+    
+      // 2. Creamos un ReadableStream para enviar chunks
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode("[")); // Inicio del JSON
+        
+          const rows = result.results || [];
+          const total = rows.length;
+        
+          rows.forEach((row, index) => {
+            const chunk = JSON.stringify(row);
+            controller.enqueue(encoder.encode(chunk));
+          
+            // Agregar coma excepto al último
+            if (index < total - 1) controller.enqueue(encoder.encode(","));
+          });
+        
+          controller.enqueue(encoder.encode("]")); // Cierre del JSON
+          controller.close();
+        }
+      });
+
+            return new Response(stream, {
+        headers: {
+          "Content-Type": "application/json; charset=utf-8"
+        }
+      });
+    });
+
+  
 
     return app.fetch(request, env, ctx);
   }
