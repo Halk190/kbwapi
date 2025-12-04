@@ -682,8 +682,6 @@ export default {
       });
     });
 
-  
-
     return app.fetch(request, env, ctx);
   }
 } satisfies ExportedHandler<Env>;
