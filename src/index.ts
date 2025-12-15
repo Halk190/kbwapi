@@ -172,21 +172,26 @@ export default {
     type Conjuro = { id: number; tipo: string };
     type Recurso = { id: number };
 
-    const APARICIONES = [
-      "Sobre de Expansion Relatos del Reino",
-      "Mazo Refuerzo Spinae",
-      "Mazo Base Natura",
-      "Mazo Base Nicrom",
-      "Mazo Base Aqua",
-      "Mazo Base Pyro",
-      "Sobre Soporte a la Corona",
-    ];
+    const APARICIONES_POR_PREFIJO: Record<string, string> = {
+      SERR: "Sobre de Expansión Relatos del Reino",
+      MRSP: "Mazo Refuerzo Spinae",
+      MBNT: "Mazo Base Natura",
+      MBN:  "Mazo Base Nicrom",
+      MBA:  "Mazo Base Aqua",
+      MBP:  "Mazo Base Pyro",
+      SSC:  "Sobre Soporte a la Corona",
+    };
 
-    function obtenerAparicion(idFisico: any): string {
-      for (const prefijo of APARICIONES) {
-        if (idFisico.includes(prefijo)) return prefijo;
+    function obtenerAparicion(idFisico: string): string {
+      if (!idFisico) return "??";
+    
+      for (const [prefijo, nombre] of Object.entries(APARICIONES_POR_PREFIJO)) {
+        if (idFisico.startsWith(prefijo)) {
+          return nombre;
+        }
       }
-      return "??"; // fallback en caso de futuras expansiones desconocidas
+    
+      return "??"; // fallback para futuras expansiones
     }
 
     // Endpoint que importa JSON desde archivo para insertar o actualizar en DB
