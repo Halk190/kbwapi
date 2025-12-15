@@ -143,7 +143,6 @@ export default {
       nombre: string;
       descripcion: string;
       tipoCarta: string;
-      apariciones: string;
     };
 
     type Bestia = {
@@ -174,13 +173,13 @@ export default {
     type Recurso = { id: number };
 
     const APARICIONES = [
-      "SERR",
-      "MRSP",
-      "MBNT",
-      "MBN",
-      "MBA",
-      "MBP",
-      "SSC",
+      "Sobre de Expansion Relatos del Reino",
+      "Mazo Refuerzo Spinae",
+      "Mazo Base Natura",
+      "Mazo Base Nicrom",
+      "Mazo Base Aqua",
+      "Mazo Base Pyro",
+      "Sobre Soporte a la Corona",
     ];
 
     function obtenerAparicion(idFisico: any): string {
@@ -617,6 +616,7 @@ export default {
             nombre: ca.nombre,
             descripcion: ca.descripcion,
             tipoCarta: ca.tipo_carta,
+            apariciones: ca.apariciones
           };
           const extra = bestiasMap[ca.id] || reinasMap[ca.id] || tokensMap[ca.id];
           if (extra) {
@@ -718,6 +718,7 @@ export default {
             nombre: carta.nombre,
             descripcion: carta.descripcion,
             tipoCarta: carta.tipo_carta,
+            apariciones: carta.apariciones,
           };
           if (extra) {
             obj.atk = extra.atk;
@@ -843,6 +844,7 @@ export default {
             nombre: ca.nombre,
             descripcion: ca.descripcion,
             tipoCarta: ca.tipo_carta,
+            apariciones: ca.apariciones
           };
           const extra = bestiasMap[ca.id] || reinasMap[ca.id] || tokensMap[ca.id];
           if (extra) {
