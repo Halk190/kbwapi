@@ -143,6 +143,7 @@ export default {
       nombre: string;
       descripcion: string;
       tipoCarta: string;
+      apariciones: string;
     };
 
     type Bestia = {
