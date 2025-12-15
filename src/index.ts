@@ -371,6 +371,271 @@ export default {
       }
     });
 
+        //Endpoint para retornar id_fisico y id_global de todas las cartas
+    app.get("/all-cards-ids", adminMiddleware, async (c) => {
+      const db = c.env.DB;
+    
+      // 1. Consulta única: solo columnas necesarias
+      const result = await db.prepare(
+        "SELECT id_fisico, id_global FROM cartas ORDER BY id_global ASC"
+      ).all();
+    
+      const encoder = new TextEncoder();
+    
+      // 2. Creamos un ReadableStream para enviar chunks
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode("[")); // Inicio del JSON
+        
+          const rows = result.results || [];
+          const total = rows.length;
+        
+          rows.forEach((row, index) => {
+            const chunk = JSON.stringify(row);
+            controller.enqueue(encoder.encode(chunk));
+          
+            // Agregar coma excepto al último
+            if (index < total - 1) controller.enqueue(encoder.encode(","));
+          });
+        
+          controller.enqueue(encoder.encode("]")); // Cierre del JSON
+          controller.close();
+        }
+      });
+
+            return new Response(stream, {
+        headers: {
+          "Content-Type": "application/json; charset=utf-8"
+        }
+      });
+    });
+
+    // Endpoint para Buscar cartas con filtros
+    app.get("/search-cards", adminMiddleware, async (c) => {
+      try {
+        // 1) Leer parámetros de query
+        const rawIdFisico = c.req.query("idFisico");
+        const rawNombre = c.req.query("nombre");
+        const rawTipo = c.req.query("tipo");
+        const rawReino = c.req.query("reino");
+        const rawNivel = c.req.query("nivel");
+
+        // 2) Normalizar filtros
+        const tipos: string[] = rawTipo
+          ? Array.from(new Set(rawTipo.split(",").map(s => s.trim()).filter(Boolean).map(s => s.toUpperCase().replace(/\s+/g, "_"))))
+          : [];
+        const reinos: string[] = rawReino
+          ? Array.from(new Set(rawReino.split(",").map(s => s.trim()).filter(Boolean).map(s => s.toUpperCase())))
+          : [];
+        const niveles: number[] = rawNivel
+          ? Array.from(new Set(rawNivel.split(",").map(s => parseInt(s, 10)).filter(n => !isNaN(n))))
+          : [];
+
+        const validReinos = ["NATURA", "NICROM", "PYRO", "AQUA"];
+        for (const r of reinos) {
+          if (!validReinos.includes(r))
+            return c.json({ error: `Reino inválido: ${r}. Válidos: ${validReinos.join(", ")}` }, 400);
+        }
+
+        // 3) Mapear tipos a sus tablas correspondientes
+        const tipoMap: Record<string, { table: "bestias" | "reinas" | "tokens" | "cartas" }> = {
+          BESTIA_NORMAL: { table: "bestias" },
+          BESTIA_HABILIDAD: { table: "bestias" },
+          REINA: { table: "reinas" },
+          TOKEN: { table: "tokens" },
+          CONJURO_NORMAL: { table: "cartas" },
+          CONJURO_CAMPO: { table: "cartas" },
+          RECURSO: { table: "cartas" },
+        };
+        for (const t of tipos) {
+          if (!tipoMap[t]) return c.json({ error: `Tipo inválido: ${t}` }, 400);
+        }
+
+        // 4) Función para obtener info de subtablas (bestias, reinas, tokens)
+        const fetchSubtable = async (table: "bestias" | "reinas" | "tokens", columns: string[], ids: number[]): Promise<Record<number, any>> => {
+          const combined: Record<number, any> = {};
+          if (!ids.length) return combined;
+          const CHUNK_SIZE = 15; // Por si hay muchos ids, los dividimos en chunks
+          for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+            const chunk = ids.slice(i, i + CHUNK_SIZE);
+            const placeholders = chunk.map(() => "?").join(",");
+            const colsStr = columns.length ? ", " + columns.join(", ") : "";
+            const rows = await env.DB.prepare(`SELECT id${colsStr} FROM ${table} WHERE id IN (${placeholders})`).bind(...chunk).all();
+            for (const row of rows.results as any[]) combined[row.id] = row;
+          }
+          return combined;
+        };
+
+        // 5) Caso especial: si se pasa idFisico → traer carta + merge con su subtabla
+        if (rawIdFisico) {
+          const rows = await env.DB.prepare("SELECT * FROM cartas WHERE id_fisico = ?").bind(rawIdFisico).all();
+          if (!rows.results.length) return c.json([]);
+          const carta = rows.results[0];
+
+          let extra: any = null;
+          if (carta.tipo_carta === "BESTIA_NORMAL" || carta.tipo_carta === "BESTIA_HABILIDAD") {
+            const r = await env.DB.prepare("SELECT atk, def, lvl, reino, tiene_habilidad_esp FROM bestias WHERE id = ?").bind(carta.id).all();
+            extra = r.results[0] || null;
+          } else if (carta.tipo_carta === "REINA") {
+            const r = await env.DB.prepare("SELECT atk, lvl, reino FROM reinas WHERE id = ?").bind(carta.id).all();
+            extra = r.results[0] || null;
+          } else if (carta.tipo_carta === "TOKEN") {
+            const r = await env.DB.prepare("SELECT atk, def, lvl, reino FROM tokens WHERE id = ?").bind(carta.id).all();
+            extra = r.results[0] || null;
+          }
+
+          // 🔀 Merge final (igual que en paso 13)
+          const obj: any = {
+            idFisico: carta.id_fisico,
+            idGlobal: carta.id_global,
+            nombre: carta.nombre,
+            descripcion: carta.descripcion,
+            tipoCarta: carta.tipo_carta,
+          };
+          if (extra) {
+            obj.atk = extra.atk;
+            if ("def" in extra) obj.def = extra.def;
+            obj.lvl = extra.lvl;
+            obj.reino = extra.reino;
+            if ("tiene_habilidad_esp" in extra) obj.tieneHabilidadEsp = extra.tiene_habilidad_esp === 1;
+          }
+
+          return c.json([obj]);
+        }
+
+        // 6) Preparar subtablas con sus columnas
+        const subtables = [
+          { name: "bestias", cols: ["atk", "def", "lvl", "reino", "tiene_habilidad_esp"] },
+          { name: "reinas", cols: ["atk", "lvl", "reino"] },
+          { name: "tokens", cols: ["atk", "def", "lvl", "reino"] },
+        ];
+
+        let cartas: any[] = [];
+        const tiposConReino = ["BESTIA_NORMAL", "BESTIA_HABILIDAD", "REINA", "TOKEN"];
+        const tiposAND = tipos.filter(t => tiposConReino.includes(t));
+
+        // 7) Filtrado dinámico AND para tipos especiales
+        if (tiposAND.length) {
+          for (const t of tiposAND) {
+            const table = tipoMap[t].table;
+            let query = `SELECT c.*, s.* 
+            FROM cartas c 
+            JOIN ${table} s ON c.id = s.id 
+            WHERE c.tipo_carta = ?`;
+            const bindParams: any[] = [t];
+
+            if (reinos.length) {
+              query += ` AND s.reino IN (${reinos.map(() => "?").join(",")})`;
+              bindParams.push(...reinos);
+            }
+            if (niveles.length) {
+              query += ` AND s.lvl IN (${niveles.map(() => "?").join(",")})`;
+              bindParams.push(...niveles);
+            }
+            if (rawNombre) {
+              query += " AND LOWER(c.nombre) LIKE ?";
+              bindParams.push(`%${rawNombre.toLowerCase()}%`);
+            }
+
+            const rows = await env.DB.prepare(query).bind(...bindParams).all();
+            cartas.push(...rows.results);
+          }
+        }
+
+        // 8) Tipos restantes (conjuros, recursos) se filtran normalmente
+        const tiposRestantes = tipos.filter(t => !tiposConReino.includes(t));
+        if (tiposRestantes.length) {
+          let query = `SELECT * FROM cartas WHERE tipo_carta IN (${tiposRestantes.map(() => "?").join(",")})`;
+          const bindParams: any[] = [...tiposRestantes];
+          if (rawNombre) {
+            query += " AND LOWER(nombre) LIKE ?";
+            bindParams.push(`%${rawNombre.toLowerCase()}%`);
+          }
+          const rows = await env.DB.prepare(query).bind(...bindParams).all();
+          cartas.push(...rows.results);
+        }
+
+        // 9) Si no se pasa ningún filtro, traer todas las cartas
+        if (!tipos.length && !reinos.length && !rawNombre && !niveles.length) {
+          const rows = await env.DB.prepare("SELECT * FROM cartas").all();
+          cartas.push(...rows.results);
+        }
+
+        // 10) Subtablas si no se filtró por tipo
+        let subCartas: any[] = [];
+        if (!tiposAND.length && (reinos.length || niveles.length || rawNombre)) {
+          for (const sub of subtables) {
+            let query = `SELECT c.*, s.* FROM cartas c JOIN ${sub.name} s ON c.id = s.id WHERE 1=1`;
+            const params: any[] = [];
+            if (reinos.length) {
+              query += ` AND s.reino IN (${reinos.map(() => "?").join(",")})`;
+              params.push(...reinos);
+            }
+            if (niveles.length) {
+              query += ` AND s.lvl IN (${niveles.map(() => "?").join(",")})`;
+              params.push(...niveles);
+            }
+            if (rawNombre) {
+              query += " AND LOWER(c.nombre) LIKE ?";
+              params.push(`%${rawNombre.toLowerCase()}%`);
+            }
+            const rows = await env.DB.prepare(query).bind(...params).all();
+            subCartas.push(...rows.results);
+          }
+        }
+
+        // 11) Unir resultados y eliminar duplicados
+        let todas = [...cartas, ...subCartas];
+        const seen = new Set();
+        todas = todas.filter(c => {
+          if (seen.has(c.id)) return false;
+          seen.add(c.id);
+          return true;
+        });
+        if (!todas.length) return c.json([]);
+
+        // 12) Enriquecer con info de subtablas
+        const ids = todas.map(c => c.id);
+        const tiposSet = new Set(todas.map(c => c.tipo_carta));
+
+        const bestiasMap = (tiposSet.has("BESTIA_NORMAL") || tiposSet.has("BESTIA_HABILIDAD"))
+          ? await fetchSubtable("bestias", subtables.find(s => s.name === "bestias")!.cols, ids)
+          : {};
+        const reinasMap = tiposSet.has("REINA")
+          ? await fetchSubtable("reinas", subtables.find(s => s.name === "reinas")!.cols, ids)
+          : {};
+        const tokensMap = tiposSet.has("TOKEN")
+          ? await fetchSubtable("tokens", subtables.find(s => s.name === "tokens")!.cols, ids)
+          : {};
+
+        // 13) Merge final para resultados múltiples
+        const result = todas.map(ca => {
+          const obj: any = {
+            idFisico: ca.id_fisico,
+            idGlobal: ca.id_global,
+            nombre: ca.nombre,
+            descripcion: ca.descripcion,
+            tipoCarta: ca.tipo_carta,
+          };
+          const extra = bestiasMap[ca.id] || reinasMap[ca.id] || tokensMap[ca.id];
+          if (extra) {
+            obj.atk = extra.atk;
+            if ("def" in extra) obj.def = extra.def;
+            obj.lvl = extra.lvl;
+            obj.reino = extra.reino;
+            if ("tiene_habilidad_esp" in extra) obj.tieneHabilidadEsp = extra.tiene_habilidad_esp === 1;
+          }
+          return obj;
+        });
+
+        return c.json(result);
+
+      } catch (err: any) {
+        console.error(err);
+        return c.json({ error: err.message }, 500);
+      }
+    });
+
     // Endpoint para Buscar cartas con filtros
     app.get("/search-cards", userMiddleware, async (c) => {
       try {
@@ -639,47 +904,6 @@ export default {
         console.error("Error en /card-image:", err);
         return c.json({ error: err.message }, 500);
       }
-    });
-
-
-
-    //Endpoint para retornar id_fisico y id_global de todas las cartas
-    app.get("/all-cards-ids", adminMiddleware, async (c) => {
-      const db = c.env.DB;
-    
-      // 1. Consulta única: solo columnas necesarias
-      const result = await db.prepare(
-        "SELECT id_fisico, id_global FROM cartas ORDER BY id_global ASC"
-      ).all();
-    
-      const encoder = new TextEncoder();
-    
-      // 2. Creamos un ReadableStream para enviar chunks
-      const stream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(encoder.encode("[")); // Inicio del JSON
-        
-          const rows = result.results || [];
-          const total = rows.length;
-        
-          rows.forEach((row, index) => {
-            const chunk = JSON.stringify(row);
-            controller.enqueue(encoder.encode(chunk));
-          
-            // Agregar coma excepto al último
-            if (index < total - 1) controller.enqueue(encoder.encode(","));
-          });
-        
-          controller.enqueue(encoder.encode("]")); // Cierre del JSON
-          controller.close();
-        }
-      });
-
-            return new Response(stream, {
-        headers: {
-          "Content-Type": "application/json; charset=utf-8"
-        }
-      });
     });
 
     return app.fetch(request, env, ctx);
