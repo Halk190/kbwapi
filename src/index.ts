@@ -185,9 +185,9 @@ export default {
     function obtenerAparicion(idFisico: string): string {
       if (!idFisico) return "??";
     
-      for (const [prefijo, nombre] of Object.entries(APARICIONES_POR_PREFIJO)) {
-        if (idFisico.startsWith(prefijo)) {
-          return nombre;
+      for (const [prefijo, aparicion] of Object.entries(APARICIONES_POR_PREFIJO)) {
+        if (idFisico.includes(prefijo)) {
+          return aparicion;
         }
       }
     
